@@ -43,10 +43,11 @@ function extractSetCookies(headers: Record<string, unknown>): string {
   return arr.map((c) => c.split(';')[0].trim()).join('; ')
 }
 
-// GET /api/books/stats — total and downloaded counts (must be before /:id)
-router.get('/stats', (_req, res) => {
+// GET /api/books/stats?source= — total and downloaded counts (must be before /:id)
+router.get('/stats', (req, res) => {
   try {
-    res.json(getStats())
+    const source = req.query['source'] as string | undefined
+    res.json(getStats(source))
   } catch (err) {
     res.status(500).json({ error: String(err) })
   }
@@ -89,83 +90,101 @@ router.post('/:id/download', async (req, res) => {
   }
 
   try {
-    // ── Step 1: Fetch book page ─────────────────────────────────────────────
-    // Accumulate cookies across the whole flow (session-cookie accumulator)
-    let jar = ''
+    const fileBuffer = book.source === 'gutenberg'
+      ? await downloadGutenberg(book)
+      : await downloadEpubBooks(book)
 
-    const pageRes = await axios.get<string>(book.book_url, {
-      headers: { ...BROWSER_HEADERS },
-      timeout: 30_000,
-    })
-    jar = mergeCookies(jar, extractSetCookies(pageRes.headers as Record<string, unknown>))
-
-    const $ = cheerio.load(pageRes.data)
-    const dlid = $('button#getDownloadId[data-dlid]').first().attr('data-dlid')
-    if (!dlid) throw new Error('[step1] Download button not found on book page')
-
-    // Extract CSRF token if present (Rails AJAX protection)
-    const csrfToken = $('meta[name="csrf-token"]').attr('content') ?? ''
-
-    // ── Step 2: Request time-limited download token ─────────────────────────
-    const postHeaders: Record<string, string> = {
-      ...BROWSER_HEADERS,
-      'Content-Type': 'application/json',
-      Cookie: jar,
-      Referer: book.book_url,
-      Origin: BASE,
-      'X-Requested-With': 'XMLHttpRequest',
-    }
-    if (csrfToken) postHeaders['X-CSRF-Token'] = csrfToken
-
-    const tokenRes = await axios.post<unknown>(
-      `${BASE}/downloads`,
-      JSON.stringify({ id: parseInt(dlid, 10) }),
-      { headers: postHeaders, timeout: 15_000 }
-    )
-
-    // !! Capture cookies that the POST response sets (session binding)
-    jar = mergeCookies(jar, extractSetCookies(tokenRes.headers as Record<string, unknown>))
-
-    const tokenData =
-      typeof tokenRes.data === 'string' ? JSON.parse(tokenRes.data) : tokenRes.data
-    if (!tokenData?.id) throw new Error('[step2] Invalid token response from server')
-
-    console.log(`[download] token=${tokenData.id} jar="${jar}"`)
-
-    // ── Step 3: Download the epub file ──────────────────────────────────────
-    const fileRes = await axios.get<ArrayBuffer>(
-      `${BASE}/downloads/${tokenData.id}/file`,
-      {
-        responseType: 'arraybuffer',
-        headers: {
-          'User-Agent': BROWSER_HEADERS['User-Agent'],
-          Accept: 'application/epub+zip, application/octet-stream, */*;q=0.8',
-          'Accept-Language': BROWSER_HEADERS['Accept-Language'],
-          Cookie: jar,
-          Referer: book.book_url,
-        },
-        timeout: 60_000,
-        maxRedirects: 5,
-      }
-    )
-
-    const contentType = (fileRes.headers['content-type'] as string) ?? ''
-    if (contentType.includes('text/html')) {
-      throw new Error('[step3] Server returned an HTML error page instead of the epub file')
-    }
-
-    // ── Step 4: Save to disk ────────────────────────────────────────────────
     const settings = getAllSettings()
     const localPath = resolveUniqueLocalPath(settings.data_path, book.author, book.title)
-    writeEpub(localPath, Buffer.from(fileRes.data))
+    writeEpub(localPath, fileBuffer)
     updateBookDownload(id, localPath)
-
     res.json({ local_path: localPath })
   } catch (err) {
     console.error('[download]', String(err))
     res.status(500).json({ error: String(err), book_url: book.book_url })
   }
 })
+
+async function downloadGutenberg(book: { book_id: string; download_url: string | null; book_url: string }): Promise<Buffer> {
+  const url = book.download_url ?? `https://www.gutenberg.org/ebooks/${book.book_id}.epub.images`
+  const res = await axios.get<ArrayBuffer>(url, {
+    responseType: 'arraybuffer',
+    headers: {
+      'User-Agent': BROWSER_HEADERS['User-Agent'],
+      Accept: 'application/epub+zip, application/octet-stream, */*;q=0.8',
+    },
+    timeout: 60_000,
+    maxRedirects: 10,
+  })
+  const ct = (res.headers['content-type'] as string) ?? ''
+  if (ct.includes('text/html')) {
+    throw new Error('[gutenberg] Server returned HTML — epub may not be available for this book')
+  }
+  return Buffer.from(res.data)
+}
+
+async function downloadEpubBooks(book: { book_url: string }): Promise<Buffer> {
+  // ── Step 1: Fetch book page ─────────────────────────────────────────────
+  let jar = ''
+  const pageRes = await axios.get<string>(book.book_url, {
+    headers: { ...BROWSER_HEADERS },
+    timeout: 30_000,
+  })
+  jar = mergeCookies(jar, extractSetCookies(pageRes.headers as Record<string, unknown>))
+
+  const $ = cheerio.load(pageRes.data)
+  const dlid = $('button#getDownloadId[data-dlid]').first().attr('data-dlid')
+  if (!dlid) throw new Error('[step1] Download button not found on book page')
+
+  const csrfToken = $('meta[name="csrf-token"]').attr('content') ?? ''
+
+  // ── Step 2: Request time-limited download token ─────────────────────────
+  const postHeaders: Record<string, string> = {
+    ...BROWSER_HEADERS,
+    'Content-Type': 'application/json',
+    Cookie: jar,
+    Referer: book.book_url,
+    Origin: BASE,
+    'X-Requested-With': 'XMLHttpRequest',
+  }
+  if (csrfToken) postHeaders['X-CSRF-Token'] = csrfToken
+
+  const tokenRes = await axios.post<unknown>(
+    `${BASE}/downloads`,
+    JSON.stringify({ id: parseInt(dlid, 10) }),
+    { headers: postHeaders, timeout: 15_000 }
+  )
+  jar = mergeCookies(jar, extractSetCookies(tokenRes.headers as Record<string, unknown>))
+
+  const tokenData =
+    typeof tokenRes.data === 'string' ? JSON.parse(tokenRes.data) : tokenRes.data
+  if (!tokenData?.id) throw new Error('[step2] Invalid token response from server')
+
+  console.log(`[download] token=${tokenData.id} jar="${jar}"`)
+
+  // ── Step 3: Download the epub file ──────────────────────────────────────
+  const fileRes = await axios.get<ArrayBuffer>(
+    `${BASE}/downloads/${tokenData.id}/file`,
+    {
+      responseType: 'arraybuffer',
+      headers: {
+        'User-Agent': BROWSER_HEADERS['User-Agent'],
+        Accept: 'application/epub+zip, application/octet-stream, */*;q=0.8',
+        'Accept-Language': BROWSER_HEADERS['Accept-Language'],
+        Cookie: jar,
+        Referer: book.book_url,
+      },
+      timeout: 60_000,
+      maxRedirects: 5,
+    }
+  )
+
+  const ct = (fileRes.headers['content-type'] as string) ?? ''
+  if (ct.includes('text/html')) {
+    throw new Error('[step3] Server returned an HTML error page instead of the epub file')
+  }
+  return Buffer.from(fileRes.data)
+}
 
 // DELETE /api/books/:id/download — remove file from disk and clear DB reference
 router.delete('/:id/download', (req, res) => {

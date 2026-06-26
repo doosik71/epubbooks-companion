@@ -17,8 +17,10 @@ export const api = {
       const qs = new URLSearchParams(params).toString()
       return request<BooksResponse>(`/books${qs ? `?${qs}` : ''}`)
     },
-    stats: (): Promise<{ total: number; downloaded: number }> =>
-      request<{ total: number; downloaded: number }>('/books/stats'),
+    stats: (source?: string): Promise<{ total: number; downloaded: number }> => {
+      const qs = source ? `?source=${source}` : ''
+      return request<{ total: number; downloaded: number }>(`/books/stats${qs}`)
+    },
     get: (id: number): Promise<Book> => request<Book>(`/books/${id}`),
     download: (id: number): Promise<{ local_path: string; cached?: boolean }> =>
       request(`/books/${id}/download`, { method: 'POST' }),
@@ -27,12 +29,20 @@ export const api = {
   },
 
   subjects: {
-    list: (): Promise<Subject[]> => request<Subject[]>('/subjects'),
+    list: (source?: string): Promise<Subject[]> => {
+      const qs = source ? `?source=${source}` : ''
+      return request<Subject[]>(`/subjects${qs}`)
+    },
   },
 
   index: {
-    update: (): Promise<{ status: string }> =>
-      request('/index/update', { method: 'POST' }),
+    update: (source?: string, force?: boolean): Promise<{ status: string }> => {
+      const params = new URLSearchParams()
+      if (source) params.set('source', source)
+      if (force) params.set('force', 'true')
+      const qs = params.toString()
+      return request(`/index/update${qs ? `?${qs}` : ''}`, { method: 'POST' })
+    },
     statusStream: (): EventSource => new EventSource(`${BASE}/index/status`),
   },
 

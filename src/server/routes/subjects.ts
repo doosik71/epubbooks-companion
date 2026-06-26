@@ -3,9 +3,10 @@ import { getAllSubjects } from '../services/database'
 
 const router = Router()
 
-router.get('/', (_req, res) => {
+router.get('/', (req, res) => {
   try {
-    res.json(getAllSubjects())
+    const source = req.query['source'] as string | undefined
+    res.json(getAllSubjects(source))
   } catch (err) {
     res.status(500).json({ error: String(err) })
   }

@@ -6,9 +6,10 @@ import UpdateIndexModal from './components/UpdateIndexModal'
 import SettingsModal from './components/SettingsModal'
 import { useBooks } from './hooks/useBooks'
 import { api } from './api/client'
-import type { Subject } from './types'
+import type { Subject, Source } from './types'
 
 export default function App() {
+  const [source, setSource] = useState<Source>('epubbooks')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [selectedSubject, setSelectedSubject] = useState('')
@@ -22,20 +23,28 @@ export default function App() {
     return () => clearTimeout(t)
   }, [searchQuery])
 
-  // Load subject list on mount
+  // Reload subjects when source changes; reset selected subject
   useEffect(() => {
-    api.subjects.list().then(setSubjects).catch(console.error)
-  }, [])
+    setSelectedSubject('')
+    api.subjects.list(source).then(setSubjects).catch(console.error)
+  }, [source])
 
   const { books, total, stats, isLoading, updateBook, deleteBook, refetch } = useBooks({
     q: debouncedQuery,
     subject: selectedSubject,
+    source,
   })
+
+  const handleSourceChange = useCallback((newSource: Source) => {
+    setSource(newSource)
+    setSearchQuery('')
+    setDebouncedQuery('')
+  }, [])
 
   const handleIndexComplete = useCallback(() => {
     refetch()
-    api.subjects.list().then(setSubjects).catch(console.error)
-  }, [refetch])
+    api.subjects.list(source).then(setSubjects).catch(console.error)
+  }, [refetch, source])
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
@@ -44,6 +53,8 @@ export default function App() {
         onSearchChange={setSearchQuery}
         onUpdateIndex={() => setShowUpdateModal(true)}
         onSettings={() => setShowSettings(true)}
+        source={source}
+        onSourceChange={handleSourceChange}
       />
       <SubjectFilter
         subjects={subjects}
@@ -61,6 +72,7 @@ export default function App() {
 
       {showUpdateModal && (
         <UpdateIndexModal
+          source={source}
           onClose={() => setShowUpdateModal(false)}
           onComplete={handleIndexComplete}
         />

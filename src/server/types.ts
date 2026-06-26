@@ -1,5 +1,8 @@
+export type Source = 'epubbooks' | 'gutenberg'
+
 export interface Book {
   id: number
+  source: Source
   book_id: string
   title: string
   author: string
@@ -16,11 +19,13 @@ export interface Book {
 
 export interface Subject {
   id: number
+  source: Source
   slug: string
   name: string
   url: string
   book_count: number
   last_crawled_at: string | null
+  crawl_offset: number
 }
 
 export interface Settings {
@@ -32,12 +37,13 @@ export interface BooksQuery {
   q?: string
   subject?: string
   downloaded?: string
+  source?: string
   page?: string
   limit?: string
 }
 
 export interface IndexUpdateEvent {
-  type: 'start' | 'subject' | 'book' | 'complete' | 'error'
+  type: 'crawling' | 'start' | 'subject' | 'book' | 'complete' | 'batch_limit' | 'error'
   totalSubjects?: number
   name?: string
   done?: number
@@ -46,5 +52,6 @@ export interface IndexUpdateEvent {
   new?: boolean
   added?: number
   skipped?: number
+  hasMore?: boolean
   message?: string
 }

@@ -5,17 +5,18 @@ import type { BooksResponse } from '../types'
 interface UseBooksOptions {
   q: string
   subject: string
+  source: string
 }
 
-export function useBooks({ q, subject }: UseBooksOptions) {
+export function useBooks({ q, subject, source }: UseBooksOptions) {
   const [data, setData] = useState<BooksResponse>({ books: [], total: 0, page: 1, limit: 200 })
   const [stats, setStats] = useState<{ total: number; downloaded: number } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const fetchIdRef = useRef(0)
 
   const fetchStats = useCallback(() => {
-    api.books.stats().then(setStats).catch(console.error)
-  }, [])
+    api.books.stats(source).then(setStats).catch(console.error)
+  }, [source])
 
   const fetchBooks = useCallback(() => {
     const id = ++fetchIdRef.current
@@ -24,6 +25,7 @@ export function useBooks({ q, subject }: UseBooksOptions) {
     const params: Record<string, string> = { limit: '500', page: '1' }
     if (q) params.q = q
     if (subject) params.subject = subject
+    if (source) params.source = source
 
     api.books
       .list(params)
@@ -36,7 +38,7 @@ export function useBooks({ q, subject }: UseBooksOptions) {
       .catch(() => {
         if (id === fetchIdRef.current) setIsLoading(false)
       })
-  }, [q, subject])
+  }, [q, subject, source])
 
   useEffect(() => {
     fetchBooks()
@@ -46,7 +48,6 @@ export function useBooks({ q, subject }: UseBooksOptions) {
     fetchStats()
   }, [fetchStats])
 
-  // Optimistic update after a successful download
   const updateBook = useCallback((id: number, localPath: string) => {
     setData((prev) => ({
       ...prev,
@@ -59,7 +60,6 @@ export function useBooks({ q, subject }: UseBooksOptions) {
     setStats((prev) => (prev ? { ...prev, downloaded: prev.downloaded + 1 } : prev))
   }, [])
 
-  // Optimistic update after a successful delete
   const deleteBook = useCallback((id: number) => {
     setData((prev) => ({
       ...prev,

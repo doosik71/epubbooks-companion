@@ -1,5 +1,6 @@
 import { Router, type Response } from 'express'
 import { runIndexUpdate } from '../services/crawler'
+import { runGutenbergUpdate } from '../services/gutenberg-crawler'
 import type { IndexUpdateEvent } from '../types'
 
 const router = Router()
@@ -29,7 +30,6 @@ router.get('/status', (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no')
   res.flushHeaders()
 
-  // Keep-alive ping to prevent proxy timeouts
   const ping = setInterval(() => {
     try {
       res.write(': ping\n\n')
@@ -41,7 +41,6 @@ router.get('/status', (req, res) => {
 
   sseClients.add(res)
 
-  // Inform late-connecting clients if a crawl is already running
   if (crawlActive) {
     res.write(`data: ${JSON.stringify({ type: 'crawling' })}\n\n`)
   }
@@ -52,19 +51,20 @@ router.get('/status', (req, res) => {
   })
 })
 
-// POST /api/index/update — start index update
-// Query: ?force=true to re-crawl all subjects regardless of last_crawled_at
+// POST /api/index/update?source=epubbooks|gutenberg&force=true
 router.post('/update', (req, res) => {
   if (crawlActive) {
     res.status(409).json({ status: 'already_running' })
     return
   }
 
+  const source = (req.query['source'] as string) ?? 'epubbooks'
   const force = req.query['force'] === 'true'
-  res.json({ status: 'started', force })
+  res.json({ status: 'started', source, force })
 
   crawlActive = true
-  runIndexUpdate(broadcast, { force })
+  const runner = source === 'gutenberg' ? runGutenbergUpdate : runIndexUpdate
+  runner(broadcast, { force })
     .catch((err) => {
       console.error('[crawler]', err)
       broadcast({ type: 'error', message: String(err) })

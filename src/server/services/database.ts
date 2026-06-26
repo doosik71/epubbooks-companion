@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import path from 'path'
 import fs from 'fs'
-import type { Book, Subject, Settings, BooksQuery } from '../types'
+import type { Book, Subject, Settings, BooksQuery, Source } from '../types'
 
 const DB_DIR = path.join(process.cwd(), 'data')
 const DB_PATH = path.join(DB_DIR, 'index.sqlite')
@@ -110,6 +110,21 @@ export function initDatabase(): void {
     ''
   )
 
+  // ── Migrations ───────────────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const booksInfo = (db.prepare('PRAGMA table_info(books)') as any).all() as Array<{ name: string }>
+  if (!booksInfo.some((c) => c.name === 'source')) {
+    db.exec(`ALTER TABLE books ADD COLUMN source TEXT NOT NULL DEFAULT 'epubbooks'`)
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const subjectsInfo = (db.prepare('PRAGMA table_info(subjects)') as any).all() as Array<{ name: string }>
+  if (!subjectsInfo.some((c) => c.name === 'source')) {
+    db.exec(`ALTER TABLE subjects ADD COLUMN source TEXT NOT NULL DEFAULT 'epubbooks'`)
+  }
+  if (!subjectsInfo.some((c) => c.name === 'crawl_offset')) {
+    db.exec(`ALTER TABLE subjects ADD COLUMN crawl_offset INTEGER NOT NULL DEFAULT 0`)
+  }
+
   console.log(`Database initialized: ${DB_PATH}`)
 }
 
@@ -149,14 +164,19 @@ export function getAllSettings(): Settings {
 
 // ─── Subjects ─────────────────────────────────────────────────────────────────
 
-export function getAllSubjects(): Subject[] {
+export function getAllSubjects(source?: string): Subject[] {
+  if (source) {
+    return all<Subject>('SELECT * FROM subjects WHERE source = ? ORDER BY name', source)
+  }
   return all<Subject>('SELECT * FROM subjects ORDER BY name')
 }
 
-export function upsertSubject(subject: Omit<Subject, 'id' | 'last_crawled_at'>): void {
+export function upsertSubject(
+  subject: Omit<Subject, 'id' | 'source' | 'last_crawled_at' | 'crawl_offset'> & { source?: Source }
+): void {
   run(
-    `INSERT INTO subjects (slug, name, url, book_count)
-     VALUES (?, ?, ?, ?)
+    `INSERT INTO subjects (slug, name, url, book_count, source)
+     VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(slug) DO UPDATE SET
        name       = excluded.name,
        url        = excluded.url,
@@ -164,8 +184,13 @@ export function upsertSubject(subject: Omit<Subject, 'id' | 'last_crawled_at'>):
     subject.slug,
     subject.name,
     subject.url,
-    subject.book_count
+    subject.book_count,
+    subject.source ?? 'epubbooks'
   )
+}
+
+export function updateSubjectCrawlOffset(id: number, offset: number): void {
+  run('UPDATE subjects SET crawl_offset = ? WHERE id = ?', offset, id)
 }
 
 export function updateSubjectCrawledAt(slug: string): void {
@@ -180,12 +205,12 @@ export function getExistingBookIds(subjectSlug: string): Set<string> {
 // ─── Books ────────────────────────────────────────────────────────────────────
 
 export function upsertBook(
-  book: Omit<Book, 'id' | 'first_seen_at' | 'updated_at' | 'local_path' | 'downloaded_at'>
+  book: Omit<Book, 'id' | 'source' | 'first_seen_at' | 'updated_at' | 'local_path' | 'downloaded_at'> & { source?: Source }
 ): void {
   run(
     `INSERT INTO books
-       (book_id, title, author, subject_slug, cover_url, book_url, download_url, description)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       (source, book_id, title, author, subject_slug, cover_url, book_url, download_url, description)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(book_id) DO UPDATE SET
        title        = excluded.title,
        author       = excluded.author,
@@ -194,6 +219,7 @@ export function upsertBook(
        download_url = excluded.download_url,
        description  = excluded.description,
        updated_at   = datetime('now')`,
+    book.source ?? 'epubbooks',
     book.book_id,
     book.title,
     book.author,
@@ -203,6 +229,10 @@ export function upsertBook(
     book.download_url ?? null,
     book.description ?? null
   )
+}
+
+export function bookExistsInDb(bookId: string): boolean {
+  return ((one<{ count: number }>('SELECT COUNT(*) AS count FROM books WHERE book_id = ?', bookId) ?? { count: 0 }).count) > 0
 }
 
 export function getBook(id: number): Book | null {
@@ -243,6 +273,10 @@ export function searchBooks(query: BooksQuery): {
   const filterParams: Primitive[] = []
   const prefix = useFts ? 'b.' : ''
 
+  if (query.source) {
+    filterConds.push(`${prefix}source = ?`)
+    filterParams.push(query.source)
+  }
   if (query.subject) {
     filterConds.push(`${prefix}subject_slug = ?`)
     filterParams.push(query.subject)
@@ -296,11 +330,13 @@ export function searchBooks(query: BooksQuery): {
   return { books, total, page, limit }
 }
 
-export function getStats(): { total: number; downloaded: number } {
-  const total = (one<{ count: number }>('SELECT COUNT(*) AS count FROM books') ?? { count: 0 }).count
-  const downloaded = (
-    one<{ count: number }>('SELECT COUNT(*) AS count FROM books WHERE local_path IS NOT NULL') ?? { count: 0 }
-  ).count
+export function getStats(source?: string): { total: number; downloaded: number } {
+  const total = source
+    ? (one<{ count: number }>('SELECT COUNT(*) AS count FROM books WHERE source = ?', source) ?? { count: 0 }).count
+    : (one<{ count: number }>('SELECT COUNT(*) AS count FROM books') ?? { count: 0 }).count
+  const downloaded = source
+    ? (one<{ count: number }>('SELECT COUNT(*) AS count FROM books WHERE source = ? AND local_path IS NOT NULL', source) ?? { count: 0 }).count
+    : (one<{ count: number }>('SELECT COUNT(*) AS count FROM books WHERE local_path IS NOT NULL') ?? { count: 0 }).count
   return { total, downloaded }
 }
 

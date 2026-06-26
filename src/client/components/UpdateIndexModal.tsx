@@ -1,14 +1,16 @@
 import { useEffect, useState, useRef } from 'react'
-import type { IndexUpdateEvent } from '../types'
+import type { IndexUpdateEvent, Source } from '../types'
+import { api } from '../api/client'
 
 interface UpdateIndexModalProps {
+  source: Source
   onClose: () => void
   onComplete: () => void
 }
 
-type ModalStatus = 'connecting' | 'running' | 'done' | 'error'
+type ModalStatus = 'connecting' | 'running' | 'done' | 'batch_limit' | 'error'
 
-export default function UpdateIndexModal({ onClose, onComplete }: UpdateIndexModalProps) {
+export default function UpdateIndexModal({ source, onClose, onComplete }: UpdateIndexModalProps) {
   const [status, setStatus] = useState<ModalStatus>('connecting')
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [recentBooks, setRecentBooks] = useState<string[]>([])
@@ -19,14 +21,11 @@ export default function UpdateIndexModal({ onClose, onComplete }: UpdateIndexMod
   onCompleteRef.current = onComplete
 
   useEffect(() => {
-    const es = new EventSource('/api/index/status')
+    const es = api.index.statusStream()
     esRef.current = es
 
     es.onopen = () => {
-      // SSE connected — trigger the crawl
-      fetch('/api/index/update', { method: 'POST' })
-        .then((r) => r.json())
-        .catch(() => {})
+      api.index.update(source).catch(() => {})
     }
 
     es.onmessage = (e: MessageEvent<string>) => {
@@ -52,6 +51,11 @@ export default function UpdateIndexModal({ onClose, onComplete }: UpdateIndexMod
         setStatus('done')
         es.close()
         onCompleteRef.current()
+      } else if (event.type === 'batch_limit') {
+        setSummary({ added: event.added ?? 0, skipped: event.skipped ?? 0 })
+        setStatus('batch_limit')
+        es.close()
+        onCompleteRef.current()
       } else if (event.type === 'error') {
         setErrorMsg(event.message ?? 'Unknown error')
         setStatus('error')
@@ -62,10 +66,10 @@ export default function UpdateIndexModal({ onClose, onComplete }: UpdateIndexMod
     return () => {
       es.close()
     }
-  }, [])
+  }, [source])
 
   const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
-  const canClose = status === 'done' || status === 'error'
+  const canClose = status === 'done' || status === 'batch_limit' || status === 'error'
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -115,6 +119,9 @@ export default function UpdateIndexModal({ onClose, onComplete }: UpdateIndexMod
             {status === 'done' && (
               <span className="text-green-700 font-medium">✓ Index updated successfully</span>
             )}
+            {status === 'batch_limit' && (
+              <span className="text-amber-700 font-medium">⏸ Batch limit reached</span>
+            )}
             {status === 'error' && (
               <span className="text-red-600 font-medium">✗ Error occurred</span>
             )}
@@ -135,6 +142,13 @@ export default function UpdateIndexModal({ onClose, onComplete }: UpdateIndexMod
             <p className="text-xs text-red-500 bg-red-50 rounded p-2">{errorMsg}</p>
           )}
 
+          {/* Batch limit notice */}
+          {status === 'batch_limit' && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+              1,000 books indexed this run. Click <strong>Update Index</strong> again to continue indexing more books.
+            </p>
+          )}
+
           {/* Recent new books */}
           {recentBooks.length > 0 && (
             <div className="space-y-1">
@@ -151,11 +165,11 @@ export default function UpdateIndexModal({ onClose, onComplete }: UpdateIndexMod
 
           {/* Summary */}
           {summary && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-              <p className="text-sm font-semibold text-green-700">
+            <div className={`border rounded-lg p-3 ${status === 'batch_limit' ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+              <p className={`text-sm font-semibold ${status === 'batch_limit' ? 'text-amber-700' : 'text-green-700'}`}>
                 {summary.added.toLocaleString()} new book{summary.added !== 1 ? 's' : ''} added
               </p>
-              <p className="text-xs text-green-600 mt-0.5">
+              <p className={`text-xs mt-0.5 ${status === 'batch_limit' ? 'text-amber-600' : 'text-green-600'}`}>
                 {summary.skipped.toLocaleString()} already in index
               </p>
             </div>
