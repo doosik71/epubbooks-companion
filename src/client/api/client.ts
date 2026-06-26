@@ -22,6 +22,8 @@ export const api = {
     get: (id: number): Promise<Book> => request<Book>(`/books/${id}`),
     download: (id: number): Promise<{ local_path: string; cached?: boolean }> =>
       request(`/books/${id}/download`, { method: 'POST' }),
+    deleteDownload: (id: number): Promise<{ deleted: boolean }> =>
+      request(`/books/${id}/download`, { method: 'DELETE' }),
   },
 
   subjects: {

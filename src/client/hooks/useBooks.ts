@@ -59,10 +59,21 @@ export function useBooks({ q, subject }: UseBooksOptions) {
     setStats((prev) => (prev ? { ...prev, downloaded: prev.downloaded + 1 } : prev))
   }, [])
 
+  // Optimistic update after a successful delete
+  const deleteBook = useCallback((id: number) => {
+    setData((prev) => ({
+      ...prev,
+      books: prev.books.map((b) =>
+        b.id === id ? { ...b, local_path: null, downloaded_at: null } : b
+      ),
+    }))
+    setStats((prev) => (prev ? { ...prev, downloaded: Math.max(0, prev.downloaded - 1) } : prev))
+  }, [])
+
   const refetch = useCallback(() => {
     fetchBooks()
     fetchStats()
   }, [fetchBooks, fetchStats])
 
-  return { ...data, stats, isLoading, updateBook, refetch }
+  return { ...data, stats, isLoading, updateBook, deleteBook, refetch }
 }

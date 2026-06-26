@@ -1,10 +1,12 @@
 import { Router } from 'express'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
+import fs from 'fs'
 import {
   searchBooks,
   getBook,
   updateBookDownload,
+  clearBookDownload,
   getAllSettings,
   getStats,
 } from '../services/database'
@@ -19,6 +21,26 @@ const BROWSER_HEADERS = {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.5',
+  'Accept-Encoding': 'gzip, deflate, br',
+}
+
+// Merge cookie strings, later values override earlier ones with the same key
+function mergeCookies(base: string, extra: string): string {
+  const map = new Map<string, string>()
+  for (const raw of [base, extra]) {
+    for (const part of raw.split('; ')) {
+      const name = part.split('=')[0].trim()
+      if (name) map.set(name, part)
+    }
+  }
+  return Array.from(map.values()).join('; ')
+}
+
+function extractSetCookies(headers: Record<string, unknown>): string {
+  const raw = headers['set-cookie']
+  if (!raw) return ''
+  const arr = Array.isArray(raw) ? raw : [String(raw)]
+  return arr.map((c) => c.split(';')[0].trim()).join('; ')
 }
 
 // GET /api/books/stats — total and downloaded counts (must be before /:id)
@@ -56,67 +78,83 @@ router.post('/:id/download', async (req, res) => {
   const book = getBook(id)
   if (!book) { res.status(404).json({ error: 'Not found' }); return }
 
-  // Return cached path if already downloaded
+  // Return cached path if already downloaded and file still exists on disk
   if (book.local_path) {
-    res.json({ local_path: book.local_path, cached: true })
-    return
+    if (fs.existsSync(book.local_path)) {
+      res.json({ local_path: book.local_path, cached: true })
+      return
+    }
+    // File was deleted externally — clear stale reference and re-download
+    clearBookDownload(id)
   }
 
   try {
-    // Step 1: fetch book detail page to get dlid + session cookies
+    // ── Step 1: Fetch book page ─────────────────────────────────────────────
+    // Accumulate cookies across the whole flow (session-cookie accumulator)
+    let jar = ''
+
     const pageRes = await axios.get<string>(book.book_url, {
       headers: { ...BROWSER_HEADERS },
       timeout: 30_000,
     })
-    const cookies = ((pageRes.headers['set-cookie'] as string[] | undefined) ?? [])
-      .map((c) => c.split(';')[0])
-      .join('; ')
+    jar = mergeCookies(jar, extractSetCookies(pageRes.headers as Record<string, unknown>))
 
     const $ = cheerio.load(pageRes.data)
     const dlid = $('button#getDownloadId[data-dlid]').first().attr('data-dlid')
-    if (!dlid) throw new Error('Download button not found on book page')
+    if (!dlid) throw new Error('[step1] Download button not found on book page')
 
-    // Step 2: request a time-limited download token
+    // Extract CSRF token if present (Rails AJAX protection)
+    const csrfToken = $('meta[name="csrf-token"]').attr('content') ?? ''
+
+    // ── Step 2: Request time-limited download token ─────────────────────────
+    const postHeaders: Record<string, string> = {
+      ...BROWSER_HEADERS,
+      'Content-Type': 'application/json',
+      Cookie: jar,
+      Referer: book.book_url,
+      Origin: BASE,
+      'X-Requested-With': 'XMLHttpRequest',
+    }
+    if (csrfToken) postHeaders['X-CSRF-Token'] = csrfToken
+
     const tokenRes = await axios.post<unknown>(
       `${BASE}/downloads`,
       JSON.stringify({ id: parseInt(dlid, 10) }),
-      {
-        headers: {
-          ...BROWSER_HEADERS,
-          'Content-Type': 'application/json',
-          Cookie: cookies,
-          Referer: book.book_url,
-          Origin: BASE,
-        },
-        timeout: 15_000,
-      }
+      { headers: postHeaders, timeout: 15_000 }
     )
-    const tokenData =
-      typeof tokenRes.data === 'string'
-        ? JSON.parse(tokenRes.data)
-        : tokenRes.data
-    if (!tokenData?.id) throw new Error('Invalid token response from server')
 
-    // Step 3: download the epub file
+    // !! Capture cookies that the POST response sets (session binding)
+    jar = mergeCookies(jar, extractSetCookies(tokenRes.headers as Record<string, unknown>))
+
+    const tokenData =
+      typeof tokenRes.data === 'string' ? JSON.parse(tokenRes.data) : tokenRes.data
+    if (!tokenData?.id) throw new Error('[step2] Invalid token response from server')
+
+    console.log(`[download] token=${tokenData.id} jar="${jar}"`)
+
+    // ── Step 3: Download the epub file ──────────────────────────────────────
     const fileRes = await axios.get<ArrayBuffer>(
       `${BASE}/downloads/${tokenData.id}/file`,
       {
         responseType: 'arraybuffer',
         headers: {
-          ...BROWSER_HEADERS,
-          Cookie: cookies,
+          'User-Agent': BROWSER_HEADERS['User-Agent'],
+          Accept: 'application/epub+zip, application/octet-stream, */*;q=0.8',
+          'Accept-Language': BROWSER_HEADERS['Accept-Language'],
+          Cookie: jar,
           Referer: book.book_url,
         },
         timeout: 60_000,
+        maxRedirects: 5,
       }
     )
 
     const contentType = (fileRes.headers['content-type'] as string) ?? ''
     if (contentType.includes('text/html')) {
-      throw new Error('Server returned an error page instead of the epub file')
+      throw new Error('[step3] Server returned an HTML error page instead of the epub file')
     }
 
-    // Step 4: save to disk
+    // ── Step 4: Save to disk ────────────────────────────────────────────────
     const settings = getAllSettings()
     const localPath = resolveUniqueLocalPath(settings.data_path, book.author, book.title)
     writeEpub(localPath, Buffer.from(fileRes.data))
@@ -124,9 +162,24 @@ router.post('/:id/download', async (req, res) => {
 
     res.json({ local_path: localPath })
   } catch (err) {
-    console.error('[download]', err)
+    console.error('[download]', String(err))
     res.status(500).json({ error: String(err), book_url: book.book_url })
   }
+})
+
+// DELETE /api/books/:id/download — remove file from disk and clear DB reference
+router.delete('/:id/download', (req, res) => {
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return }
+
+  const book = getBook(id)
+  if (!book) { res.status(404).json({ error: 'Not found' }); return }
+
+  if (book.local_path && fs.existsSync(book.local_path)) {
+    fs.unlinkSync(book.local_path)
+  }
+  clearBookDownload(id)
+  res.json({ deleted: true })
 })
 
 export default router

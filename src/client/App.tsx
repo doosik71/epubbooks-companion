@@ -27,7 +27,7 @@ export default function App() {
     api.subjects.list().then(setSubjects).catch(console.error)
   }, [])
 
-  const { books, total, stats, isLoading, updateBook, refetch } = useBooks({
+  const { books, total, stats, isLoading, updateBook, deleteBook, refetch } = useBooks({
     q: debouncedQuery,
     subject: selectedSubject,
   })
@@ -56,6 +56,7 @@ export default function App() {
         stats={stats}
         isLoading={isLoading}
         onBookDownloaded={updateBook}
+        onBookDeleted={deleteBook}
       />
 
       {showUpdateModal && (

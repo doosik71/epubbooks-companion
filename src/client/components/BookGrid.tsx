@@ -9,6 +9,7 @@ interface BookGridProps {
   stats: { total: number; downloaded: number } | null
   isLoading: boolean
   onBookDownloaded: (id: number, localPath: string) => void
+  onBookDeleted: (id: number) => void
 }
 
 function getColumns(): number {
@@ -41,6 +42,7 @@ export default function BookGrid({
   stats,
   isLoading,
   onBookDownloaded,
+  onBookDeleted,
 }: BookGridProps) {
   const parentRef = useRef<HTMLDivElement>(null)
   const cols = useColumns()
@@ -141,6 +143,7 @@ export default function BookGrid({
                     key={book.id}
                     book={book}
                     onDownloaded={(path) => onBookDownloaded(book.id, path)}
+                    onDeleted={onBookDeleted}
                   />
                 ))}
               </div>

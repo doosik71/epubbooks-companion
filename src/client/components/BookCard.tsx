@@ -5,11 +5,22 @@ import type { Book } from '../types'
 interface BookCardProps {
   book: Book
   onDownloaded: (localPath: string) => void
+  onDeleted: (id: number) => void
 }
 
-export default function BookCard({ book, onDownloaded }: BookCardProps) {
+// function shortPath(p: string): string {
+//   const parts = p.replace(/\\/g, '/').split('/')
+//   return parts.slice(-2).join('/')
+// }
+
+function normalize(s: string): string {
+  return s.replace(/[\r\n]+/g, ' ').trim()
+}
+
+export default function BookCard({ book, onDownloaded, onDeleted }: BookCardProps) {
   const [imgError, setImgError] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [dlError, setDlError] = useState('')
 
   const isDownloaded = Boolean(book.local_path)
@@ -24,6 +35,18 @@ export default function BookCard({ book, onDownloaded }: BookCardProps) {
       setDlError(err instanceof Error ? err.message : String(err))
     } finally {
       setDownloading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await api.books.deleteDownload(book.id)
+      onDeleted(book.id)
+    } catch (err) {
+      console.error('Delete failed:', err)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -71,23 +94,30 @@ export default function BookCard({ book, onDownloaded }: BookCardProps) {
       <div className="px-3 pt-2.5 pb-1 flex flex-col gap-0.5 flex-1 min-h-0">
         <h3
           className="text-xs font-semibold text-gray-900 line-clamp-2 leading-snug"
-          title={book.title}
+          title={normalize(book.title)}
         >
-          {book.title}
+          {normalize(book.title)}
         </h3>
-        <p className="text-xs text-gray-500 truncate" title={book.author}>
-          {book.author}
+        <p className="text-xs text-gray-500 truncate" title={normalize(book.author)}>
+          {normalize(book.author)}
         </p>
-        <p className="text-[10px] text-gray-400 mt-auto pt-1 truncate capitalize">
-          {book.subject_slug.replace(/_/g, ' ')}
-        </p>
+        {/* <p className="text-[10px] text-gray-400 mt-auto pt-1 truncate capitalize">
+          {normalize(book.subject_slug).replace(/_/g, ' ')}
+        </p> */}
       </div>
 
       {/* Action */}
       <div className="px-3 pb-3 pt-1">
         {isDownloaded ? (
-          <div className="text-xs text-green-600 font-medium text-center py-1.5">
-            ✓ Saved to disk
+          <div className="flex items-center justify-between gap-2 py-1">
+            <div className="text-xs text-green-600 font-medium">✓ Saved to disk</div>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 transition-colors shrink-0"
+            >
+              {deleting ? '…' : 'Delete'}
+            </button>
           </div>
         ) : dlError ? (
           <div className="space-y-1.5">

@@ -219,6 +219,13 @@ export function updateBookDownload(id: number, localPath: string): void {
   )
 }
 
+export function clearBookDownload(id: number): void {
+  run(
+    `UPDATE books SET local_path = NULL, downloaded_at = NULL, updated_at = datetime('now') WHERE id = ?`,
+    id
+  )
+}
+
 export function searchBooks(query: BooksQuery): {
   books: Book[]
   total: number
