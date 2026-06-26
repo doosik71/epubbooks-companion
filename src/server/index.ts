@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
+import { initDatabase } from './services/database'
 import booksRouter from './routes/books'
 import indexUpdateRouter from './routes/index-update'
 import subjectsRouter from './routes/subjects'
@@ -24,6 +25,8 @@ if (process.env.NODE_ENV === 'production') {
     res.sendFile(path.join(clientDir, 'index.html'))
   })
 }
+
+initDatabase()
 
 app.listen(PORT, () => {
   console.log(`epubbooks companion server running at http://localhost:${PORT}`)

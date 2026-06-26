@@ -220,18 +220,18 @@ function sanitize(str: string): string {
 
 ## 구현 단계
 
-### Phase 1. 프로젝트 초기화
+### Phase 1. 프로젝트 초기화 ✅
 
-- [ ] `package.json` 작성 (의존성 정의)
-- [ ] TypeScript, ESLint, Prettier 설정
-- [ ] Vite 클라이언트 빌드 설정
-- [ ] Express 서버 기본 구조
+- [x] `package.json` 작성 (의존성 정의)
+- [x] TypeScript, ESLint, Prettier 설정
+- [x] Vite 클라이언트 빌드 설정
+- [x] Express 서버 기본 구조
 
-### Phase 2. 데이터베이스 계층
+### Phase 2. 데이터베이스 계층 ✅
 
-- [ ] `database.ts` — SQLite 초기화, 스키마 마이그레이션
-- [ ] `storage.ts` — 데이터 경로 설정 관리, 파일 저장 로직
-- [ ] 설정 API (`/api/settings`)
+- [x] `database.ts` — SQLite 초기화, 스키마 마이그레이션
+- [x] `storage.ts` — 데이터 경로 설정 관리, 파일 저장 로직
+- [x] 설정 API (`/api/settings`)
 
 ### Phase 3. 크롤러
 

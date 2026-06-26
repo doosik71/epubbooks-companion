@@ -9,3 +9,4 @@ data/*.epub
 .env.*
 !.env.example
 /data
+/.claude
