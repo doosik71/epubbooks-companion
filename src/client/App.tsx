@@ -73,6 +73,7 @@ export default function App() {
       {showUpdateModal && (
         <UpdateIndexModal
           source={source}
+          subject={selectedSubject || undefined}
           onClose={() => setShowUpdateModal(false)}
           onComplete={handleIndexComplete}
         />

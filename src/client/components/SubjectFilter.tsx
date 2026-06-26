@@ -9,7 +9,7 @@ interface SubjectFilterProps {
 export default function SubjectFilter({ subjects, selected, onSelect }: SubjectFilterProps) {
   return (
     <div className="bg-white border-b border-gray-200 shrink-0">
-      <div className="max-w-screen-2xl mx-auto px-4 py-2 flex gap-1.5 overflow-x-auto scrollbar-hide">
+      <div className="max-w-screen-2xl mx-auto px-4 pt-2 pb-2.5 flex gap-1.5 overflow-x-auto">
         <button
           onClick={() => onSelect('')}
           className={`shrink-0 px-3 py-1 text-xs font-medium rounded-full transition-colors ${

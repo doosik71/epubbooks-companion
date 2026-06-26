@@ -36,10 +36,11 @@ export const api = {
   },
 
   index: {
-    update: (source?: string, force?: boolean): Promise<{ status: string }> => {
+    update: (source?: string, force?: boolean, subject?: string): Promise<{ status: string }> => {
       const params = new URLSearchParams()
       if (source) params.set('source', source)
       if (force) params.set('force', 'true')
+      if (subject) params.set('subject', subject)
       const qs = params.toString()
       return request(`/index/update${qs ? `?${qs}` : ''}`, { method: 'POST' })
     },

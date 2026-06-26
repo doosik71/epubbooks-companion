@@ -116,7 +116,7 @@ function shouldRecrawl(lastCrawledAt: string | null): boolean {
 
 export async function runGutenbergUpdate(
   emit: (event: IndexUpdateEvent) => void,
-  options: { force?: boolean } = {}
+  options: { force?: boolean; subject?: string } = {}
 ): Promise<void> {
   // 1. Fetch all bookshelves and upsert into subjects
   emit({ type: 'start', totalSubjects: 0 })
@@ -126,7 +126,9 @@ export async function runGutenbergUpdate(
   }
 
   // 2. Select bookshelves to crawl this run
-  const allSubjects = getAllSubjects('gutenberg')
+  const allSubjects = options.subject
+    ? getAllSubjects('gutenberg').filter((s) => s.slug === options.subject)
+    : getAllSubjects('gutenberg')
 
   // force=true: reset all offsets so we re-scan from the beginning of each bookshelf
   if (options.force) {

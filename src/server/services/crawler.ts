@@ -152,7 +152,7 @@ function shouldCrawl(lastCrawledAt: string | null): boolean {
 
 export async function runIndexUpdate(
   emit: (event: IndexUpdateEvent) => void,
-  options: { force?: boolean } = {}
+  options: { force?: boolean; subject?: string } = {}
 ): Promise<void> {
   // 1. Fetch and upsert the subject catalog
   emit({ type: 'start', totalSubjects: 0 })
@@ -161,7 +161,9 @@ export async function runIndexUpdate(
     upsertSubject({ slug: s.slug, name: s.name, url: s.url, book_count: s.book_count })
   }
 
-  const dbSubjects = getAllSubjects()
+  const dbSubjects = options.subject
+    ? getAllSubjects().filter((s) => s.slug === options.subject)
+    : getAllSubjects()
   const toCrawl = options.force ? dbSubjects : dbSubjects.filter((s) => shouldCrawl(s.last_crawled_at))
 
   emit({ type: 'start', totalSubjects: toCrawl.length })

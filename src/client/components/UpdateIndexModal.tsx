@@ -4,13 +4,14 @@ import { api } from '../api/client'
 
 interface UpdateIndexModalProps {
   source: Source
+  subject?: string
   onClose: () => void
   onComplete: () => void
 }
 
 type ModalStatus = 'connecting' | 'running' | 'done' | 'batch_limit' | 'error'
 
-export default function UpdateIndexModal({ source, onClose, onComplete }: UpdateIndexModalProps) {
+export default function UpdateIndexModal({ source, subject, onClose, onComplete }: UpdateIndexModalProps) {
   const [status, setStatus] = useState<ModalStatus>('connecting')
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [recentBooks, setRecentBooks] = useState<string[]>([])
@@ -25,7 +26,7 @@ export default function UpdateIndexModal({ source, onClose, onComplete }: Update
     esRef.current = es
 
     es.onopen = () => {
-      api.index.update(source).catch(() => {})
+      api.index.update(source, false, subject).catch(() => {})
     }
 
     es.onmessage = (e: MessageEvent<string>) => {
@@ -76,7 +77,12 @@ export default function UpdateIndexModal({ source, onClose, onComplete }: Update
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h2 className="font-semibold text-gray-900">Update Index</h2>
+          <div>
+            <h2 className="font-semibold text-gray-900">Update Index</h2>
+            {subject && (
+              <p className="text-xs text-gray-400 mt-0.5">{subject}</p>
+            )}
+          </div>
           {canClose && (
             <button
               onClick={onClose}

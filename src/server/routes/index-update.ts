@@ -60,11 +60,12 @@ router.post('/update', (req, res) => {
 
   const source = (req.query['source'] as string) ?? 'epubbooks'
   const force = req.query['force'] === 'true'
-  res.json({ status: 'started', source, force })
+  const subject = (req.query['subject'] as string) || undefined
+  res.json({ status: 'started', source, force, subject })
 
   crawlActive = true
   const runner = source === 'gutenberg' ? runGutenbergUpdate : runIndexUpdate
-  runner(broadcast, { force })
+  runner(broadcast, { force, subject })
     .catch((err) => {
       console.error('[crawler]', err)
       broadcast({ type: 'error', message: String(err) })
