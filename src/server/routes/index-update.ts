@@ -1,20 +1,82 @@
-import { Router } from 'express'
+import { Router, type Response } from 'express'
+import { runIndexUpdate } from '../services/crawler'
+import type { IndexUpdateEvent } from '../types'
 
 const router = Router()
 
-// POST /api/index/update  — 인덱스 갱신 시작
-router.post('/update', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented' })
-})
+// In-memory SSE client registry
+const sseClients = new Set<Response>()
+let crawlActive = false
 
-// GET /api/index/status  — SSE 진행 상태 스트림
-router.get('/status', (_req, res) => {
+function broadcast(event: IndexUpdateEvent): void {
+  const data = `data: ${JSON.stringify(event)}\n\n`
+  const dead: Response[] = []
+  for (const client of sseClients) {
+    try {
+      client.write(data)
+    } catch {
+      dead.push(client)
+    }
+  }
+  dead.forEach((c) => sseClients.delete(c))
+}
+
+// GET /api/index/status — SSE stream for crawl progress
+router.get('/status', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
   res.flushHeaders()
-  res.write('data: {"type":"error","message":"Not implemented"}\n\n')
-  res.end()
+
+  // Keep-alive ping to prevent proxy timeouts
+  const ping = setInterval(() => {
+    try {
+      res.write(': ping\n\n')
+    } catch {
+      clearInterval(ping)
+      sseClients.delete(res)
+    }
+  }, 25_000)
+
+  sseClients.add(res)
+
+  // Inform late-connecting clients if a crawl is already running
+  if (crawlActive) {
+    res.write(`data: ${JSON.stringify({ type: 'crawling' })}\n\n`)
+  }
+
+  req.on('close', () => {
+    clearInterval(ping)
+    sseClients.delete(res)
+  })
+})
+
+// POST /api/index/update — start index update
+// Query: ?force=true to re-crawl all subjects regardless of last_crawled_at
+router.post('/update', (req, res) => {
+  if (crawlActive) {
+    res.status(409).json({ status: 'already_running' })
+    return
+  }
+
+  const force = req.query['force'] === 'true'
+  res.json({ status: 'started', force })
+
+  crawlActive = true
+  runIndexUpdate(broadcast, { force })
+    .catch((err) => {
+      console.error('[crawler]', err)
+      broadcast({ type: 'error', message: String(err) })
+    })
+    .finally(() => {
+      crawlActive = false
+    })
+})
+
+// GET /api/index/active — check if crawl is running
+router.get('/active', (_req, res) => {
+  res.json({ active: crawlActive })
 })
 
 export default router

@@ -233,12 +233,12 @@ function sanitize(str: string): string {
 - [x] `storage.ts` — 데이터 경로 설정 관리, 파일 저장 로직
 - [x] 설정 API (`/api/settings`)
 
-### Phase 3. 크롤러
+### Phase 3. 크롤러 ✅
 
-- [ ] `crawler.ts` — epubbooks.com/subjects HTML 파싱
-- [ ] 주제 목록 수집 로직
-- [ ] 각 주제별 책 목록 수집 로직 (증분)
-- [ ] 인덱스 갱신 API + SSE 진행 이벤트
+- [x] `crawler.ts` — epubbooks.com/subjects HTML 파싱
+- [x] 주제 목록 수집 로직
+- [x] 각 주제별 책 목록 수집 로직 (증분)
+- [x] 인덱스 갱신 API + SSE 진행 이벤트
 
 ### Phase 4. 책 API
 
