@@ -1,0 +1,11 @@
+node_modules/
+dist/
+data/index.sqlite
+data/index.sqlite-shm
+data/index.sqlite-wal
+data/*.epub
+*.local
+.env
+.env.*
+!.env.example
+/data
