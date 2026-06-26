@@ -114,7 +114,7 @@ export default function BookGrid({
           <p className="text-gray-400 text-sm">No books match your search</p>
         </div>
       ) : (
-        <div ref={parentRef} className="flex-1 overflow-auto">
+        <div ref={parentRef} className="flex-1 overflow-auto pt-4">
           <div
             style={{
               height: `${virtualizer.getTotalSize()}px`,

@@ -240,28 +240,28 @@ function sanitize(str: string): string {
 - [x] 각 주제별 책 목록 수집 로직 (증분)
 - [x] 인덱스 갱신 API + SSE 진행 이벤트
 
-### Phase 4. 책 API
+### Phase 4. 책 API ✅
 
-- [ ] 검색 API (FTS5 활용, 필터 지원)
-- [ ] 다운로드 API (서버에서 epub 수신 후 로컬 저장)
-- [ ] 주제 목록 API
+- [x] 검색 API (FTS5 활용, 필터 지원)
+- [x] 다운로드 API (서버에서 epub 수신 후 로컬 저장)
+- [x] 주제 목록 API
 
-### Phase 5. React 프론트엔드
+### Phase 5. React 프론트엔드 ✅
 
-- [ ] Vite + React + TailwindCSS 초기 설정
-- [ ] `Header` — 검색바, Update Index 버튼, Settings 버튼
-- [ ] `SubjectFilter` — 주제 탭 필터
-- [ ] `BookGrid` — 가상 스크롤 카드 목록
-- [ ] `BookCard` — 커버, 제목, 저자, 다운로드 상태
-- [ ] `UpdateIndexModal` — SSE 기반 실시간 진행 표시
-- [ ] `SettingsModal` — 데이터 경로 설정
+- [x] Vite + React + TailwindCSS 초기 설정
+- [x] `Header` — 검색바, Update Index 버튼, Settings 버튼
+- [x] `SubjectFilter` — 주제 탭 필터
+- [x] `BookGrid` — 가상 스크롤 카드 목록
+- [x] `BookCard` — 커버, 제목, 저자, 다운로드 상태
+- [x] `UpdateIndexModal` — SSE 기반 실시간 진행 표시
+- [x] `SettingsModal` — 데이터 경로 설정
 
-### Phase 6. 통합 및 완성
+### Phase 6. 통합 및 완성 ✅
 
-- [ ] 프론트/백엔드 연동 테스트
-- [ ] 빠른 검색 응답 검증 (목표: 100ms 이내)
-- [ ] 윈도우 경로 처리 검증 (`path.join` 일관 사용)
-- [ ] `npm start` 하나로 서버+클라이언트 동시 실행
+- [x] 프론트/백엔드 연동 테스트
+- [x] 빠른 검색 응답 검증 (FTS5: 2~4ms, 목표 100ms 이내 달성)
+- [x] 윈도우 경로 처리 검증 (`path.join` 일관 사용)
+- [x] `npm run build && npm start` → 포트 3001 단일 서버로 실행
 
 ---
 

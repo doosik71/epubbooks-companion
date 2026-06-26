@@ -90,16 +90,27 @@ export default function BookCard({ book, onDownloaded }: BookCardProps) {
             ✓ Saved to disk
           </div>
         ) : dlError ? (
-          <div className="space-y-1">
-            <p className="text-[10px] text-red-500 truncate" title={dlError}>
+          <div className="space-y-1.5">
+            <p className="text-[10px] text-red-500 line-clamp-2" title={dlError}>
               {dlError}
             </p>
-            <button
-              onClick={handleDownload}
-              className="w-full text-xs py-1.5 border border-red-300 text-red-600 rounded hover:bg-red-50 transition-colors"
-            >
-              Retry
-            </button>
+            <div className="flex gap-1">
+              <button
+                onClick={handleDownload}
+                className="flex-1 text-xs py-1.5 border border-gray-300 text-gray-600 rounded hover:bg-gray-50 transition-colors"
+              >
+                Retry
+              </button>
+              <a
+                href={book.book_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 text-xs py-1.5 text-center border border-indigo-300 text-indigo-600 rounded hover:bg-indigo-50 transition-colors"
+                title="Open on epubbooks.com"
+              >
+                Open ↗
+              </a>
+            </div>
           </div>
         ) : (
           <button
