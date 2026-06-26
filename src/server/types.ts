@@ -31,6 +31,7 @@ export interface Subject {
 export interface Settings {
   data_path: string
   last_full_update: string | null
+  hide_cover: boolean
 }
 
 export interface BooksQuery {

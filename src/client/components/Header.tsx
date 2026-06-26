@@ -1,10 +1,10 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import type { Source } from '../types'
 
 interface HeaderProps {
   searchQuery: string
   onSearchChange: (q: string) => void
-  onUpdateIndex: () => void
+  onUpdateIndex: (force?: boolean) => void
   onSettings: () => void
   source: Source
   onSourceChange: (source: Source) => void
@@ -19,6 +19,19 @@ export default function Header({
   onSourceChange,
 }: HeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!dropdownOpen) return
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [dropdownOpen])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -95,12 +108,37 @@ export default function Header({
         </div>
 
         <div className="flex items-center gap-2 ml-auto shrink-0">
-          <button
-            onClick={onUpdateIndex}
-            className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 active:bg-indigo-800 transition-colors"
-          >
-            Update Index
-          </button>
+          {/* Split button */}
+          <div className="relative" ref={dropdownRef}>
+            <div className="flex items-stretch rounded-lg overflow-hidden">
+              <button
+                onClick={() => onUpdateIndex(false)}
+                className="px-3 py-2 text-sm bg-indigo-600 text-white font-medium hover:bg-indigo-700 active:bg-indigo-800 transition-colors"
+              >
+                Update Index
+              </button>
+              <div className="w-px bg-indigo-500" />
+              <button
+                onClick={() => setDropdownOpen((v) => !v)}
+                title="More options"
+                className="px-2 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 transition-colors flex items-center"
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z" />
+                </svg>
+              </button>
+            </div>
+            {dropdownOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[180px] z-50">
+                <button
+                  onClick={() => { setDropdownOpen(false); onUpdateIndex(true) }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Force Update Index
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={onSettings}
             title="Settings"

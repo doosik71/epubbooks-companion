@@ -9,12 +9,14 @@ import { api } from './api/client'
 import type { Subject, Source } from './types'
 
 export default function App() {
-  const [source, setSource] = useState<Source>('epubbooks')
+  const [source, setSource] = useState<Source>('gutenberg')
+  const [hideCover, setHideCover] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [selectedSubject, setSelectedSubject] = useState('')
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [forceUpdate, setForceUpdate] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
   // Debounce search input 300ms
@@ -22,6 +24,11 @@ export default function App() {
     const t = setTimeout(() => setDebouncedQuery(searchQuery), 300)
     return () => clearTimeout(t)
   }, [searchQuery])
+
+  // Load hide_cover setting on mount
+  useEffect(() => {
+    api.settings.get().then((s) => setHideCover(s.hide_cover)).catch(console.error)
+  }, [])
 
   // Reload subjects when source changes; reset selected subject
   useEffect(() => {
@@ -51,7 +58,7 @@ export default function App() {
       <Header
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onUpdateIndex={() => setShowUpdateModal(true)}
+        onUpdateIndex={(force) => { setForceUpdate(force ?? false); setShowUpdateModal(true) }}
         onSettings={() => setShowSettings(true)}
         source={source}
         onSourceChange={handleSourceChange}
@@ -66,6 +73,7 @@ export default function App() {
         total={total}
         stats={stats}
         isLoading={isLoading}
+        hideCover={hideCover}
         onBookDownloaded={updateBook}
         onBookDeleted={deleteBook}
       />
@@ -74,12 +82,16 @@ export default function App() {
         <UpdateIndexModal
           source={source}
           subject={selectedSubject || undefined}
+          force={forceUpdate}
           onClose={() => setShowUpdateModal(false)}
           onComplete={handleIndexComplete}
         />
       )}
       {showSettings && (
-        <SettingsModal onClose={() => setShowSettings(false)} />
+        <SettingsModal onClose={() => {
+          setShowSettings(false)
+          api.settings.get().then((s) => setHideCover(s.hide_cover)).catch(console.error)
+        }} />
       )}
     </div>
   )

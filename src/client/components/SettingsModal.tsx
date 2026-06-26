@@ -3,6 +3,7 @@ import { api } from '../api/client'
 
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [dataPath, setDataPath] = useState('')
+  const [hideCover, setHideCover] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
@@ -12,6 +13,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       .get()
       .then((s) => {
         setDataPath(s.data_path)
+        setHideCover(s.hide_cover)
         setLastUpdate(s.last_full_update)
       })
       .catch(console.error)
@@ -21,7 +23,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     setSaving(true)
     setSavedOk(false)
     try {
-      await api.settings.update({ data_path: dataPath })
+      await api.settings.update({ data_path: dataPath, hide_cover: hideCover })
       setSavedOk(true)
       setTimeout(onClose, 900)
     } catch (err) {
@@ -67,6 +69,18 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               </code>
             </p>
           </div>
+
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <div
+              onClick={() => setHideCover((v) => !v)}
+              className={`relative w-9 h-5 rounded-full transition-colors ${hideCover ? 'bg-indigo-600' : 'bg-gray-300'}`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${hideCover ? 'translate-x-4' : ''}`}
+              />
+            </div>
+            <span className="text-sm font-medium text-gray-700">Hide book cover images</span>
+          </label>
 
           {lastUpdate && (
             <p className="text-xs text-gray-400">

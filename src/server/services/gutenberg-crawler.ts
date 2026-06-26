@@ -6,7 +6,6 @@ import {
   upsertBook,
   updateSubjectCrawledAt,
   updateSubjectCrawlOffset,
-  bookExistsInDb,
   setSetting,
 } from './database'
 import type { IndexUpdateEvent } from '../types'
@@ -74,17 +73,24 @@ interface RawBook {
 async function fetchBookshelfPage(
   shelfUrl: string,
   startIndex: number
-): Promise<{ books: RawBook[]; count: number }> {
+): Promise<{ books: RawBook[]; rawCount: number }> {
   const url = `${shelfUrl}?start_index=${startIndex}`
   const res = await http.get<string>(url)
   const $ = cheerio.load(res.data)
   const books: RawBook[] = []
+  let rawCount = 0  // total li.booklink items on the page, regardless of parse success
 
   $('li.booklink').each((_, el) => {
+    rawCount++
     const link = $(el).find('a.link, a').first()
     const href = link.attr('href') ?? ''
-    const idMatch = href.match(/\/ebooks\/(\d+)$/)
-    if (!idMatch) return
+    // Strip trailing slash or query string before matching
+    const cleanHref = href.split('?')[0].replace(/\/$/, '')
+    const idMatch = cleanHref.match(/\/ebooks\/(\d+)$/)
+    if (!idMatch) {
+      console.log(`[gutenberg] skipped item with href="${href}"`)
+      return
+    }
 
     const id = idMatch[1]
     const title =
@@ -104,7 +110,8 @@ async function fetchBookshelfPage(
     })
   })
 
-  return { books, count: books.length }
+  console.log(`[gutenberg] ${url} → ${rawCount} li.booklink, ${books.length} parsed`)
+  return { books, rawCount }
 }
 
 // ── Main update ───────────────────────────────────────────────────────────────
@@ -162,40 +169,39 @@ export async function runGutenbergUpdate(
 
     // Start from where we left off (crawl_offset = number of books already fetched)
     let offset = subject.crawl_offset
-    let pageCount = PAGE_SIZE  // assume full page to start loop
 
     try {
-      while (pageCount >= PAGE_SIZE && totalAdded < BATCH_LIMIT) {
+      while (totalAdded < BATCH_LIMIT) {
         await sleep(DELAY_MS)
         const startIndex = offset + 1  // Gutenberg uses 1-based start_index
-        const { books, count } = await fetchBookshelfPage(subject.url, startIndex)
-        pageCount = count
+        const { books, rawCount } = await fetchBookshelfPage(subject.url, startIndex)
 
         for (const book of books) {
-          if (bookExistsInDb(book.book_id)) {
-            totalSkipped++
-          } else {
-            upsertBook({
-              source: 'gutenberg',
-              book_id: book.book_id,
-              title: book.title,
-              author: book.author,
-              subject_slug: subject.slug,
-              cover_url: book.cover_url,
-              book_url: book.book_url,
-              download_url: book.download_url,
-              description: null,
-            })
+          const isNew = upsertBook({
+            source: 'gutenberg',
+            book_id: book.book_id,
+            title: book.title,
+            author: book.author,
+            subject_slug: subject.slug,
+            cover_url: book.cover_url,
+            book_url: book.book_url,
+            download_url: book.download_url,
+            description: null,
+          })
+          if (isNew) {
             totalAdded++
             emit({ type: 'book', title: book.title, new: true })
+          } else {
+            totalSkipped++
           }
         }
 
-        offset += count
+        // Advance offset by rawCount so we don't re-fetch the same items next page
+        offset += rawCount
         updateSubjectCrawlOffset(subject.id, offset)
 
-        // Reached the last page of this bookshelf
-        if (count < PAGE_SIZE) {
+        // Empty page (no li.booklink at all) means end of bookshelf
+        if (rawCount === 0) {
           updateSubjectCrawledAt(subject.slug)
           break
         }

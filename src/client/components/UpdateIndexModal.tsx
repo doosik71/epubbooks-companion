@@ -5,13 +5,14 @@ import { api } from '../api/client'
 interface UpdateIndexModalProps {
   source: Source
   subject?: string
+  force?: boolean
   onClose: () => void
   onComplete: () => void
 }
 
 type ModalStatus = 'connecting' | 'running' | 'done' | 'batch_limit' | 'error'
 
-export default function UpdateIndexModal({ source, subject, onClose, onComplete }: UpdateIndexModalProps) {
+export default function UpdateIndexModal({ source, subject, force, onClose, onComplete }: UpdateIndexModalProps) {
   const [status, setStatus] = useState<ModalStatus>('connecting')
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [recentBooks, setRecentBooks] = useState<string[]>([])
@@ -26,7 +27,7 @@ export default function UpdateIndexModal({ source, subject, onClose, onComplete 
     esRef.current = es
 
     es.onopen = () => {
-      api.index.update(source, false, subject).catch(() => {})
+      api.index.update(source, force ?? false, subject).catch(() => {})
     }
 
     es.onmessage = (e: MessageEvent<string>) => {
@@ -78,7 +79,9 @@ export default function UpdateIndexModal({ source, subject, onClose, onComplete 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div>
-            <h2 className="font-semibold text-gray-900">Update Index</h2>
+            <h2 className="font-semibold text-gray-900">
+              {force ? 'Force Update Index' : 'Update Index'}
+            </h2>
             {subject && (
               <p className="text-xs text-gray-400 mt-0.5">{subject}</p>
             )}

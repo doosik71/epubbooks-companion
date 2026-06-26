@@ -49,7 +49,7 @@ export const api = {
 
   settings: {
     get: (): Promise<AppSettings> => request<AppSettings>('/settings'),
-    update: (data: Partial<AppSettings>): Promise<AppSettings> =>
+    update: (data: Partial<Omit<AppSettings, 'last_full_update'>>): Promise<AppSettings> =>
       request('/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

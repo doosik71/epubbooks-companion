@@ -4,6 +4,7 @@ import type { Book } from '../types'
 
 interface BookCardProps {
   book: Book
+  hideCover: boolean
   onDownloaded: (localPath: string) => void
   onDeleted: (id: number) => void
 }
@@ -17,7 +18,7 @@ function normalize(s: string): string {
   return s.replace(/[\r\n]+/g, ' ').trim()
 }
 
-export default function BookCard({ book, onDownloaded, onDeleted }: BookCardProps) {
+export default function BookCard({ book, hideCover, onDownloaded, onDeleted }: BookCardProps) {
   const [imgError, setImgError] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -57,38 +58,40 @@ export default function BookCard({ book, onDownloaded, onDeleted }: BookCardProp
       }`}
     >
       {/* Cover */}
-      <div className="h-44 bg-gray-100 relative overflow-hidden">
-        {!imgError && book.cover_url ? (
-          <img
-            src={book.cover_url}
-            alt={book.title}
-            onError={() => setImgError(true)}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-50 to-gray-100">
-            <svg
-              className="w-12 h-12 text-gray-300"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-              />
-            </svg>
-          </div>
-        )}
-        {isDownloaded && (
-          <div className="absolute top-1.5 right-1.5 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-semibold leading-tight">
-            ✓ Saved
-          </div>
-        )}
-      </div>
+      {!hideCover && (
+        <div className="h-44 bg-gray-100 relative overflow-hidden">
+          {!imgError && book.cover_url ? (
+            <img
+              src={book.cover_url}
+              alt={book.title}
+              onError={() => setImgError(true)}
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-50 to-gray-100">
+              <svg
+                className="w-12 h-12 text-gray-300"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1}
+                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                />
+              </svg>
+            </div>
+          )}
+          {isDownloaded && (
+            <div className="absolute top-1.5 right-1.5 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-semibold leading-tight">
+              ✓ Saved
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Info */}
       <div className="px-3 pt-2.5 pb-1 flex flex-col gap-0.5 flex-1 min-h-0">
@@ -146,7 +149,7 @@ export default function BookCard({ book, onDownloaded, onDeleted }: BookCardProp
           <button
             onClick={handleDownload}
             disabled={downloading}
-            className="w-full text-xs py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
+            className="w-full text-xs py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
           >
             {downloading ? (
               <>

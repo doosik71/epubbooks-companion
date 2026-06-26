@@ -8,6 +8,7 @@ interface BookGridProps {
   total: number
   stats: { total: number; downloaded: number } | null
   isLoading: boolean
+  hideCover: boolean
   onBookDownloaded: (id: number, localPath: string) => void
   onBookDeleted: (id: number) => void
 }
@@ -33,7 +34,8 @@ function useColumns(): number {
   return cols
 }
 
-const CARD_HEIGHT = 268  // h-44 cover + info + button
+const CARD_HEIGHT_COVER = 268    // h-44 cover + info + button
+const CARD_HEIGHT_NO_COVER = 110 // info + button only
 const GAP = 12
 
 export default function BookGrid({
@@ -41,11 +43,13 @@ export default function BookGrid({
   total,
   stats,
   isLoading,
+  hideCover,
   onBookDownloaded,
   onBookDeleted,
 }: BookGridProps) {
   const parentRef = useRef<HTMLDivElement>(null)
   const cols = useColumns()
+  const cardHeight = hideCover ? CARD_HEIGHT_NO_COVER : CARD_HEIGHT_COVER
 
   const rows = useMemo(() => {
     const result: Book[][] = []
@@ -58,9 +62,13 @@ export default function BookGrid({
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => CARD_HEIGHT + GAP,
+    estimateSize: () => cardHeight + GAP,
     overscan: 3,
   })
+
+  useEffect(() => {
+    virtualizer.measure()
+  }, [hideCover])
 
   // ── Empty / loading states ─────────────────────────────────────────────────
   if (isLoading) {
@@ -142,6 +150,7 @@ export default function BookGrid({
                   <BookCard
                     key={book.id}
                     book={book}
+                    hideCover={hideCover}
                     onDownloaded={(path) => onBookDownloaded(book.id, path)}
                     onDeleted={onBookDeleted}
                   />

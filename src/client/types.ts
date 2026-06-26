@@ -49,4 +49,5 @@ export interface IndexUpdateEvent {
 export interface AppSettings {
   data_path: string
   last_full_update: string | null
+  hide_cover: boolean
 }

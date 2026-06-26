@@ -109,6 +109,19 @@ export function initDatabase(): void {
     'last_full_update',
     ''
   )
+  ;(db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)') as never as { run: (...a: unknown[]) => void }).run(
+    'hide_cover',
+    'false'
+  )
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS book_subjects (
+      book_id    INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      PRIMARY KEY (book_id, subject_id)
+    )
+  `)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_book_subjects_subject ON book_subjects(subject_id)`)
 
   // ── Migrations ───────────────────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,6 +137,11 @@ export function initDatabase(): void {
   if (!subjectsInfo.some((c) => c.name === 'crawl_offset')) {
     db.exec(`ALTER TABLE subjects ADD COLUMN crawl_offset INTEGER NOT NULL DEFAULT 0`)
   }
+  // Populate book_subjects from existing subject_slug (idempotent)
+  db.exec(`
+    INSERT OR IGNORE INTO book_subjects (book_id, subject_id)
+    SELECT b.id, s.id FROM books b JOIN subjects s ON s.slug = b.subject_slug
+  `)
 
   console.log(`Database initialized: ${DB_PATH}`)
 }
@@ -159,6 +177,7 @@ export function getAllSettings(): Settings {
   return {
     data_path: getSetting('data_path') ?? path.join(process.cwd(), 'data'),
     last_full_update: getSetting('last_full_update') || null,
+    hide_cover: getSetting('hide_cover') === 'true',
   }
 }
 
@@ -198,15 +217,26 @@ export function updateSubjectCrawledAt(slug: string): void {
 }
 
 export function getExistingBookIds(subjectSlug: string): Set<string> {
-  const rows = all<{ book_id: string }>('SELECT book_id FROM books WHERE subject_slug = ?', subjectSlug)
+  const rows = all<{ book_id: string }>(
+    `SELECT b.book_id FROM books b
+     JOIN book_subjects bs ON bs.book_id = b.id
+     JOIN subjects s ON s.id = bs.subject_id
+     WHERE s.slug = ?`,
+    subjectSlug
+  )
   return new Set(rows.map((r) => r.book_id))
 }
 
 // ─── Books ────────────────────────────────────────────────────────────────────
 
+export function bookExistsInDb(bookId: string): boolean {
+  return ((one<{ count: number }>('SELECT COUNT(*) AS count FROM books WHERE book_id = ?', bookId) ?? { count: 0 }).count) > 0
+}
+
 export function upsertBook(
   book: Omit<Book, 'id' | 'source' | 'first_seen_at' | 'updated_at' | 'local_path' | 'downloaded_at'> & { source?: Source }
-): void {
+): boolean {
+  const isNew = !bookExistsInDb(book.book_id)
   run(
     `INSERT INTO books
        (source, book_id, title, author, subject_slug, cover_url, book_url, download_url, description)
@@ -229,10 +259,13 @@ export function upsertBook(
     book.download_url ?? null,
     book.description ?? null
   )
-}
-
-export function bookExistsInDb(bookId: string): boolean {
-  return ((one<{ count: number }>('SELECT COUNT(*) AS count FROM books WHERE book_id = ?', bookId) ?? { count: 0 }).count) > 0
+  // Add book-subject relationship
+  const bookRow = one<{ id: number }>('SELECT id FROM books WHERE book_id = ?', book.book_id)
+  const subjectRow = one<{ id: number }>('SELECT id FROM subjects WHERE slug = ?', book.subject_slug)
+  if (bookRow && subjectRow) {
+    run('INSERT OR IGNORE INTO book_subjects (book_id, subject_id) VALUES (?, ?)', bookRow.id, subjectRow.id)
+  }
+  return isNew
 }
 
 export function getBook(id: number): Book | null {
@@ -278,7 +311,9 @@ export function searchBooks(query: BooksQuery): {
     filterParams.push(query.source)
   }
   if (query.subject) {
-    filterConds.push(`${prefix}subject_slug = ?`)
+    filterConds.push(
+      `${prefix}id IN (SELECT bs.book_id FROM book_subjects bs JOIN subjects s ON s.id = bs.subject_id WHERE s.slug = ?)`
+    )
     filterParams.push(query.subject)
   }
   if (query.downloaded === 'true') {
