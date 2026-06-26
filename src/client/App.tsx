@@ -1,47 +1,72 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import Header from './components/Header'
+import SubjectFilter from './components/SubjectFilter'
+import BookGrid from './components/BookGrid'
+import UpdateIndexModal from './components/UpdateIndexModal'
+import SettingsModal from './components/SettingsModal'
+import { useBooks } from './hooks/useBooks'
+import { api } from './api/client'
+import type { Subject } from './types'
 
-function App() {
+export default function App() {
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [selectedSubject, setSelectedSubject] = useState('')
+  const [subjects, setSubjects] = useState<Subject[]>([])
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+
+  // Debounce search input 300ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
+
+  // Load subject list on mount
+  useEffect(() => {
+    api.subjects.list().then(setSubjects).catch(console.error)
+  }, [])
+
+  const { books, total, stats, isLoading, updateBook, refetch } = useBooks({
+    q: debouncedQuery,
+    subject: selectedSubject,
+  })
+
+  const handleIndexComplete = useCallback(() => {
+    refetch()
+    api.subjects.list().then(setSubjects).catch(console.error)
+  }, [refetch])
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4">
-          <h1 className="text-lg font-semibold text-gray-900 shrink-0">epubbooks companion</h1>
-          <div className="flex-1 max-w-xl">
-            <input
-              type="search"
-              placeholder="Search books by title or author..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <div className="flex items-center gap-2 ml-auto shrink-0">
-            <button className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors">
-              Update Index
-            </button>
-            <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
-              ⚙ Settings
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+      <Header
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onUpdateIndex={() => setShowUpdateModal(true)}
+        onSettings={() => setShowSettings(true)}
+      />
+      <SubjectFilter
+        subjects={subjects}
+        selected={selectedSubject}
+        onSelect={setSelectedSubject}
+      />
+      <BookGrid
+        books={books}
+        total={total}
+        stats={stats}
+        isLoading={isLoading}
+        onBookDownloaded={updateBook}
+      />
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8">
-        <div className="flex items-center justify-center h-64 text-center">
-          <div>
-            <p className="text-gray-400 text-4xl mb-4">📚</p>
-            <p className="text-gray-600 font-medium">No books indexed yet</p>
-            <p className="text-gray-400 text-sm mt-1">
-              Click <strong className="text-gray-600">Update Index</strong> to fetch books from
-              epubbooks.com
-            </p>
-          </div>
-        </div>
-      </main>
+      {showUpdateModal && (
+        <UpdateIndexModal
+          onClose={() => setShowUpdateModal(false)}
+          onComplete={handleIndexComplete}
+        />
+      )}
+      {showSettings && (
+        <SettingsModal onClose={() => setShowSettings(false)} />
+      )}
     </div>
   )
 }
-
-export default App

@@ -2,7 +2,7 @@
 
 [epubbooks.com](https://www.epubbooks.com/)의 미흡한 기능을 보완하는 로컬 웹앱.
 
-epubbooks.com은 무료 epub를 제공하지만 다운로드 이력을 기억하지 않고 검색 기능도 제대로 동작하지 않습니다. epubbooks companion은 이를 보완합니다.
+epubbooks.com은 무료 epub를 제공하지만 다운로드 이력을 기억하지 않습니다. epubbooks companion은 이를 보완합니다.
 
 ## 주요 기능
 
@@ -82,9 +82,3 @@ epubbooks-companion/
 │   └── index.sqlite     # epub 메타데이터 DB
 └── DEVPLAN.md           # 개발 계획
 ```
-
-## 개발 배경
-
-epubbooks.com은 다운로드 이력을 저장하지 않기 때문에 어떤 책을 이미 받았는지 알 수 없고, 사이트 검색 기능도 불편합니다.
-epubbooks companion은 이 두 가지 문제를 로컬에서 해결합니다.
-모든 데이터는 로컬에만 저장됩니다.

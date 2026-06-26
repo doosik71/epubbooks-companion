@@ -1,10 +1,14 @@
 import { Router } from 'express'
+import { getAllSubjects } from '../services/database'
 
 const router = Router()
 
-// GET /api/subjects
 router.get('/', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented' })
+  try {
+    res.json(getAllSubjects())
+  } catch (err) {
+    res.status(500).json({ error: String(err) })
+  }
 })
 
 export default router

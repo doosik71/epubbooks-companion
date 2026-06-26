@@ -28,7 +28,7 @@ export interface BooksResponse {
 }
 
 export interface IndexUpdateEvent {
-  type: 'start' | 'subject' | 'book' | 'complete' | 'error'
+  type: 'crawling' | 'start' | 'subject' | 'book' | 'complete' | 'error'
   totalSubjects?: number
   name?: string
   done?: number

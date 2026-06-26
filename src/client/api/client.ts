@@ -17,8 +17,10 @@ export const api = {
       const qs = new URLSearchParams(params).toString()
       return request<BooksResponse>(`/books${qs ? `?${qs}` : ''}`)
     },
+    stats: (): Promise<{ total: number; downloaded: number }> =>
+      request<{ total: number; downloaded: number }>('/books/stats'),
     get: (id: number): Promise<Book> => request<Book>(`/books/${id}`),
-    download: (id: number): Promise<{ local_path: string }> =>
+    download: (id: number): Promise<{ local_path: string; cached?: boolean }> =>
       request(`/books/${id}/download`, { method: 'POST' }),
   },
 
@@ -27,7 +29,8 @@ export const api = {
   },
 
   index: {
-    update: (): Promise<void> => request('/index/update', { method: 'POST' }),
+    update: (): Promise<{ status: string }> =>
+      request('/index/update', { method: 'POST' }),
     statusStream: (): EventSource => new EventSource(`${BASE}/index/status`),
   },
 
