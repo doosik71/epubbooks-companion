@@ -95,6 +95,51 @@ data/
     pride_and_prejudice.epub
 ```
 
+## data 폴더 백업 / 이동
+
+다운로드한 epub 파일(`data/`)을 다른 폴더(예: 외장 드라이브, NAS 마운트 경로)로 복사하는 명령 예시입니다.
+
+### Windows — robocopy
+
+```bat
+robocopy data D:\backup\epubs /E /XC /XN /XO
+```
+
+| 옵션  | 설명                                       |
+| ----- | ------------------------------------------ |
+| `/E`  | 하위 폴더 포함 전체 복사                   |
+| `/XC` | 변경된 파일(크기·타임스탬프 불일치) 건너뜀 |
+| `/XN` | 원본이 대상보다 새로운 파일 건너뜀         |
+| `/XO` | 원본이 대상보다 오래된 파일 건너뜀         |
+
+`/XC /XN /XO` 세 옵션을 함께 쓰면 **대상 폴더에 이미 파일이 존재하는 경우 모두 건너뜁니다.** 원본에만 있는 신규 파일만 복사됩니다.
+
+진행 상황을 로그로 남기려면 `/LOG:copy.log`를 추가하세요.
+
+```bat
+robocopy data F:\epub-companion /E /XN /XO
+```
+
+### Linux / macOS — rsync
+
+```bash
+rsync -av --ignore-existing data/ /mnt/backup/epubs/
+```
+
+| 옵션                | 설명                                           |
+| ------------------- | ---------------------------------------------- |
+| `-a`                | 아카이브 모드 (하위 폴더·권한·타임스탬프 보존) |
+| `-v`                | 복사 중인 파일명 출력                          |
+| `--ignore-existing` | 대상에 이미 존재하는 파일 건너뜀               |
+
+진행률을 보려면 `--progress`를 추가하세요.
+
+```bash
+rsync -av --progress --ignore-existing data/ /mnt/backup/epubs/
+```
+
+> **참고**: `data/` 뒤의 슬래시(`/`)는 폴더 내용을 복사한다는 의미입니다. 슬래시 없이 `data`로 쓰면 `epubs/data/` 형태로 한 단계 더 들어가게 됩니다.
+
 ## 프로젝트 구조
 
 ```text
