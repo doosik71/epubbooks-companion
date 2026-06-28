@@ -61,10 +61,14 @@ export default function BookGrid({
     return result
   }, [books, cols])
 
+  const remaining = total - books.length
+  const hasMore = remaining > 0
+  const rowCount = rows.length + (hasMore ? 1 : 0)
+
   const virtualizer = useVirtualizer({
-    count: rows.length,
+    count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => cardHeight + GAP,
+    estimateSize: (i) => i < rows.length ? cardHeight + GAP : 48,
     overscan: 3,
   })
 
@@ -95,7 +99,7 @@ export default function BookGrid({
           <p className="text-gray-700 font-medium">No books indexed yet</p>
           <p className="text-gray-400 text-sm">
             Click <strong className="text-gray-600">Update Index</strong> to crawl{' '}
-            {source === 'gutenberg' ? 'Project Gutenberg' : 'epubbooks.com'}
+            {source === 'gutenberg' ? 'Project Gutenberg' : source === 'standardebooks' ? 'Standard Ebooks' : 'epubbooks.com'}
           </p>
         </div>
       </div>
@@ -134,32 +138,53 @@ export default function BookGrid({
               position: 'relative',
             }}
           >
-            {virtualizer.getVirtualItems().map((vRow) => (
-              <div
-                key={vRow.index}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  transform: `translateY(${vRow.start}px)`,
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-                  gap: `${GAP}px`,
-                  padding: `0 16px ${GAP}px`,
-                }}
-              >
-                {rows[vRow.index].map((book) => (
-                  <BookCard
-                    key={book.id}
-                    book={book}
-                    hideCover={hideCover}
-                    onDownloaded={(path) => onBookDownloaded(book.id, path)}
-                    onDeleted={onBookDeleted}
-                  />
-                ))}
-              </div>
-            ))}
+            {virtualizer.getVirtualItems().map((vRow) => {
+              if (vRow.index === rows.length) {
+                return (
+                  <div
+                    key="more"
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      transform: `translateY(${vRow.start}px)`,
+                      padding: `4px 16px 16px`,
+                    }}
+                  >
+                    <p className="text-sm text-gray-400 text-center py-2">
+                      more... (+{remaining.toLocaleString()})
+                    </p>
+                  </div>
+                )
+              }
+              return (
+                <div
+                  key={vRow.index}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    transform: `translateY(${vRow.start}px)`,
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                    gap: `${GAP}px`,
+                    padding: `0 16px ${GAP}px`,
+                  }}
+                >
+                  {rows[vRow.index].map((book) => (
+                    <BookCard
+                      key={book.id}
+                      book={book}
+                      hideCover={hideCover}
+                      onDownloaded={(path) => onBookDownloaded(book.id, path)}
+                      onDeleted={onBookDeleted}
+                    />
+                  ))}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

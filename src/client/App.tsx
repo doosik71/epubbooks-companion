@@ -62,6 +62,7 @@ export default function App() {
         onSettings={() => setShowSettings(true)}
         source={source}
         onSourceChange={handleSourceChange}
+        updateIndexDisabled={!selectedSubject}
       />
       <SubjectFilter
         subjects={subjects}

@@ -14,6 +14,7 @@ const BASE = 'https://www.epubbooks.com'
 const DELAY_MS = 700            // ms between page requests
 const THRESHOLD_MS = 24 * 60 * 60 * 1000  // 24h before re-crawling a subject
 const CONCURRENCY = 3           // max parallel subjects
+const BATCH_LIMIT = 500         // max new books to index per run
 
 const http = axios.create({
   baseURL: BASE,
@@ -155,18 +156,18 @@ export async function runIndexUpdate(
   options: { force?: boolean; subject?: string } = {}
 ): Promise<void> {
   // 1. Fetch and upsert the subject catalog
-  emit({ type: 'start', totalSubjects: 0 })
+  emit({ type: 'start', totalSubjects: 0, batchLimit: BATCH_LIMIT })
   const rawSubjects = await fetchSubjectList()
   for (const s of rawSubjects) {
-    upsertSubject({ slug: s.slug, name: s.name, url: s.url, book_count: s.book_count })
+    upsertSubject({ slug: s.slug, name: s.name, url: s.url, book_count: s.book_count, source: 'epubbooks' })
   }
 
   const dbSubjects = options.subject
-    ? getAllSubjects().filter((s) => s.slug === options.subject)
-    : getAllSubjects()
+    ? getAllSubjects('epubbooks').filter((s) => s.slug === options.subject)
+    : getAllSubjects('epubbooks')
   const toCrawl = options.force ? dbSubjects : dbSubjects.filter((s) => shouldCrawl(s.last_crawled_at))
 
-  emit({ type: 'start', totalSubjects: toCrawl.length })
+  emit({ type: 'start', totalSubjects: toCrawl.length, batchLimit: BATCH_LIMIT })
 
   if (toCrawl.length === 0) {
     emit({ type: 'complete', added: 0, skipped: 0 })
@@ -182,6 +183,8 @@ export async function runIndexUpdate(
 
   async function worker(): Promise<void> {
     while (true) {
+      if (totalAdded >= BATCH_LIMIT) break
+
       const subject = queue.shift()
       if (!subject) break
 
@@ -193,16 +196,18 @@ export async function runIndexUpdate(
         let page = 1
         let hasNextPage = true
 
-        while (hasNextPage) {
+        while (hasNextPage && totalAdded < BATCH_LIMIT) {
           if (page > 1) await sleep(DELAY_MS)
           const { books, hasNextPage: next } = await fetchSubjectPage(subject.slug, page)
           hasNextPage = next
 
           for (const book of books) {
+            if (totalAdded >= BATCH_LIMIT) break
             if (existingIds.has(book.book_id)) {
               totalSkipped++
             } else {
               upsertBook({
+                source: 'epubbooks',
                 book_id: book.book_id,
                 title: book.title,
                 author: book.author,
@@ -222,7 +227,9 @@ export async function runIndexUpdate(
           if (hasNextPage) await sleep(DELAY_MS)
         }
 
-        updateSubjectCrawledAt(subject.slug)
+        if (totalAdded < BATCH_LIMIT) {
+          updateSubjectCrawledAt(subject.slug)
+        }
       } catch (err) {
         emit({ type: 'error', message: `[${subject.name}] ${String(err)}` })
       }
@@ -234,5 +241,10 @@ export async function runIndexUpdate(
   )
 
   setSetting('last_full_update', new Date().toISOString())
-  emit({ type: 'complete', added: totalAdded, skipped: totalSkipped })
+
+  if (totalAdded >= BATCH_LIMIT) {
+    emit({ type: 'batch_limit', added: totalAdded, skipped: totalSkipped, hasMore: true })
+  } else {
+    emit({ type: 'complete', added: totalAdded, skipped: totalSkipped })
+  }
 }

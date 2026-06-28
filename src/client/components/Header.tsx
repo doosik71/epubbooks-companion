@@ -8,6 +8,7 @@ interface HeaderProps {
   onSettings: () => void
   source: Source
   onSourceChange: (source: Source) => void
+  updateIndexDisabled?: boolean
 }
 
 export default function Header({
@@ -17,6 +18,7 @@ export default function Header({
   onSettings,
   source,
   onSourceChange,
+  updateIndexDisabled = false,
 }: HeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -74,6 +76,16 @@ export default function Header({
           >
             epubbooks
           </button>
+          <button
+            onClick={() => onSourceChange('standardebooks')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              source === 'standardebooks'
+                ? 'bg-indigo-600 text-white'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            Standard Ebooks
+          </button>
         </div>
 
         <div className="flex-1 max-w-xl">
@@ -110,25 +122,38 @@ export default function Header({
         <div className="flex items-center gap-2 ml-auto shrink-0">
           {/* Split button */}
           <div className="relative" ref={dropdownRef}>
-            <div className="flex items-stretch rounded-lg overflow-hidden">
+            <div
+              className="flex items-stretch rounded-lg overflow-hidden"
+              title={updateIndexDisabled ? 'Select a subject to update index' : undefined}
+            >
               <button
-                onClick={() => onUpdateIndex(false)}
-                className="px-3 py-2 text-sm bg-indigo-600 text-white font-medium hover:bg-indigo-700 active:bg-indigo-800 transition-colors"
+                onClick={() => !updateIndexDisabled && onUpdateIndex(false)}
+                disabled={updateIndexDisabled}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${
+                  updateIndexDisabled
+                    ? 'bg-indigo-300 text-white cursor-not-allowed'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800'
+                }`}
               >
                 Update Index
               </button>
-              <div className="w-px bg-indigo-500" />
+              <div className={`w-px ${updateIndexDisabled ? 'bg-indigo-200' : 'bg-indigo-500'}`} />
               <button
-                onClick={() => setDropdownOpen((v) => !v)}
+                onClick={() => !updateIndexDisabled && setDropdownOpen((v) => !v)}
+                disabled={updateIndexDisabled}
                 title="More options"
-                className="px-2 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 transition-colors flex items-center"
+                className={`px-2 flex items-center transition-colors ${
+                  updateIndexDisabled
+                    ? 'bg-indigo-300 text-white cursor-not-allowed'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800'
+                }`}
               >
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
                   <path d="M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z" />
                 </svg>
               </button>
             </div>
-            {dropdownOpen && (
+            {dropdownOpen && !updateIndexDisabled && (
               <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[180px] z-50">
                 <button
                   onClick={() => { setDropdownOpen(false); onUpdateIndex(true) }}

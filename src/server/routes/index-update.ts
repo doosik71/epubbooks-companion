@@ -1,9 +1,18 @@
 import { Router, type Response } from 'express'
 import { runIndexUpdate } from '../services/crawler'
 import { runGutenbergUpdate } from '../services/gutenberg-crawler'
-import type { IndexUpdateEvent } from '../types'
+import { runStandardEbooksUpdate } from '../services/standardebooks-crawler'
+import type { IndexUpdateEvent, Source } from '../types'
 
 const router = Router()
+
+type CrawlRunner = (emit: (event: IndexUpdateEvent) => void, options?: { force?: boolean; subject?: string }) => Promise<void>
+
+const RUNNERS: Record<Source, CrawlRunner> = {
+  epubbooks:      runIndexUpdate,
+  gutenberg:      runGutenbergUpdate,
+  standardebooks: runStandardEbooksUpdate,
+}
 
 // In-memory SSE client registry
 const sseClients = new Set<Response>()
@@ -61,10 +70,17 @@ router.post('/update', (req, res) => {
   const source = (req.query['source'] as string) ?? 'epubbooks'
   const force = req.query['force'] === 'true'
   const subject = (req.query['subject'] as string) || undefined
+
+  // All sources require a subject selection — full-library crawl is prohibited
+  if (!subject) {
+    res.status(400).json({ status: 'error', message: 'Select a subject before updating index' })
+    return
+  }
+
   res.json({ status: 'started', source, force, subject })
 
   crawlActive = true
-  const runner = source === 'gutenberg' ? runGutenbergUpdate : runIndexUpdate
+  const runner = RUNNERS[source as Source] ?? runIndexUpdate
   runner(broadcast, { force, subject })
     .catch((err) => {
       console.error('[crawler]', err)

@@ -90,9 +90,9 @@ router.post('/:id/download', async (req, res) => {
   }
 
   try {
-    const fileBuffer = book.source === 'gutenberg'
-      ? await downloadGutenberg(book)
-      : await downloadEpubBooks(book)
+    const fileBuffer = book.source === 'epubbooks'
+      ? await downloadEpubBooks(book)
+      : await downloadDirect(book)
 
     const settings = getAllSettings()
     const localPath = resolveUniqueLocalPath(settings.data_path, book.source, book.author, book.title)
@@ -118,8 +118,14 @@ function assertEpubFormat(buf: Buffer, contentType: string): void {
   }
 }
 
-async function downloadGutenberg(book: { book_id: string; download_url: string | null; book_url: string }): Promise<Buffer> {
-  const url = book.download_url ?? `https://www.gutenberg.org/ebooks/${book.book_id}.epub.images`
+async function downloadDirect(book: { source: string; book_id: string; download_url: string | null; book_url: string }): Promise<Buffer> {
+  let url = book.download_url ??
+    (book.source === 'gutenberg' ? `https://www.gutenberg.org/ebooks/${book.book_id}.epub.images` : book.book_url)
+  // Standard Ebooks shows a donation interstitial at the bare epub URL;
+  // ?source=download bypasses it and returns the epub binary directly
+  if (book.source === 'standardebooks' && !url.includes('?')) {
+    url = `${url}?source=download`
+  }
   const res = await axios.get<ArrayBuffer>(url, {
     responseType: 'arraybuffer',
     headers: {
@@ -131,7 +137,7 @@ async function downloadGutenberg(book: { book_id: string; download_url: string |
   })
   const ct = (res.headers['content-type'] as string) ?? ''
   if (ct.includes('text/html')) {
-    throw new Error('[gutenberg] Server returned HTML — epub may not be available for this book')
+    throw new Error(`[${book.source}] Server returned HTML — epub may not be available for this book`)
   }
   const buf = Buffer.from(res.data)
   assertEpubFormat(buf, ct)

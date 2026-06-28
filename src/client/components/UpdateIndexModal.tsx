@@ -155,7 +155,7 @@ export default function UpdateIndexModal({ source, subject, force, onClose, onCo
           {/* Batch limit notice */}
           {status === 'batch_limit' && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-              1,000 books indexed this run. Click <strong>Update Index</strong> again to continue indexing more books.
+              {batchLimit ? batchLimit.toLocaleString() : 'Batch limit'} books indexed this run. Click <strong>Update Index</strong> again to continue indexing more books.
             </p>
           )}
 

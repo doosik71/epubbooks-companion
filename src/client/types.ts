@@ -1,4 +1,4 @@
-export type Source = 'epubbooks' | 'gutenberg'
+export type Source = 'epubbooks' | 'gutenberg' | 'standardebooks'
 
 export interface Book {
   id: number

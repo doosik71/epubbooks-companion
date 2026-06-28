@@ -13,7 +13,7 @@ import type { IndexUpdateEvent } from '../types'
 const BASE = 'https://www.gutenberg.org'
 const DELAY_MS = 600
 const PAGE_SIZE = 25         // Gutenberg shows 25 books per bookshelf page
-const BATCH_LIMIT = 1000     // max new books to index per run
+const BATCH_LIMIT = 500      // max new books to index per run
 const STALE_MS = 7 * 24 * 60 * 60 * 1000  // 7 days before re-crawling exhausted bookshelves
 
 const http = axios.create({

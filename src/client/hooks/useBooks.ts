@@ -22,7 +22,7 @@ export function useBooks({ q, subject, source }: UseBooksOptions) {
     const id = ++fetchIdRef.current
     setIsLoading(true)
 
-    const params: Record<string, string> = { limit: '500', page: '1' }
+    const params: Record<string, string> = { limit: '2000', page: '1' }
     if (q) params.q = q
     if (subject) params.subject = subject
     if (source) params.source = source
