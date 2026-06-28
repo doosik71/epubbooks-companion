@@ -49,7 +49,8 @@ export function initDatabase(): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS books (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      book_id       TEXT UNIQUE NOT NULL,
+      source        TEXT NOT NULL DEFAULT 'epubbooks',
+      book_id       TEXT NOT NULL,
       title         TEXT NOT NULL,
       author        TEXT NOT NULL,
       subject_slug  TEXT NOT NULL,
@@ -60,7 +61,8 @@ export function initDatabase(): void {
       local_path    TEXT,
       downloaded_at TEXT,
       first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+      updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(source, book_id)
     )
   `)
 
@@ -143,6 +145,92 @@ export function initDatabase(): void {
     SELECT b.id, s.id FROM books b JOIN subjects s ON s.slug = b.subject_slug
   `)
 
+  // Migrate books table: replace UNIQUE(book_id) with UNIQUE(source, book_id)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const booksSql = ((db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='books'`) as any).get() as { sql: string } | undefined)?.sql ?? ''
+  if (!booksSql.includes('UNIQUE(source, book_id)')) {
+    console.log('[db] Migrating books table to composite unique key (source, book_id)...')
+    // Fix corrupt records: source='epubbooks' but URL points to Gutenberg
+    run(`UPDATE books SET source = 'gutenberg' WHERE source = 'epubbooks' AND book_url LIKE 'https://www.gutenberg.org%'`)
+    // Drop FTS triggers (they'll be recreated below)
+    db.exec(`DROP TRIGGER IF EXISTS books_ai; DROP TRIGGER IF EXISTS books_ad; DROP TRIGGER IF EXISTS books_au`)
+    // Create replacement table with correct unique constraint
+    db.exec(`
+      CREATE TABLE books_new (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        source        TEXT NOT NULL DEFAULT 'epubbooks',
+        book_id       TEXT NOT NULL,
+        title         TEXT NOT NULL,
+        author        TEXT NOT NULL,
+        subject_slug  TEXT NOT NULL,
+        cover_url     TEXT,
+        book_url      TEXT NOT NULL,
+        download_url  TEXT,
+        description   TEXT,
+        local_path    TEXT,
+        downloaded_at TEXT,
+        first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(source, book_id)
+      )
+    `)
+    db.exec(`
+      INSERT OR IGNORE INTO books_new
+        (id, source, book_id, title, author, subject_slug, cover_url, book_url, download_url, description, local_path, downloaded_at, first_seen_at, updated_at)
+      SELECT id, source, book_id, title, author, subject_slug, cover_url, book_url, download_url, description, local_path, downloaded_at, first_seen_at, updated_at
+      FROM books
+    `)
+    db.exec(`DELETE FROM books_fts`)
+    db.exec(`DROP TABLE books`)
+    db.exec(`ALTER TABLE books_new RENAME TO books`)
+    // Recreate FTS triggers for new table
+    db.exec(`
+      CREATE TRIGGER books_ai AFTER INSERT ON books BEGIN
+        INSERT INTO books_fts(rowid, title, author, description)
+        VALUES (new.id, new.title, new.author, COALESCE(new.description, ''));
+      END
+    `)
+    db.exec(`
+      CREATE TRIGGER books_ad AFTER DELETE ON books BEGIN
+        DELETE FROM books_fts WHERE rowid = old.id;
+      END
+    `)
+    db.exec(`
+      CREATE TRIGGER books_au AFTER UPDATE ON books BEGIN
+        DELETE FROM books_fts WHERE rowid = old.id;
+        INSERT INTO books_fts(rowid, title, author, description)
+        VALUES (new.id, new.title, new.author, COALESCE(new.description, ''));
+      END
+    `)
+    // Repopulate FTS
+    db.exec(`
+      INSERT INTO books_fts(rowid, title, author, description)
+      SELECT id, title, author, COALESCE(description, '') FROM books
+    `)
+    // Remove stale book_subjects where book.source differs from subject.source
+    db.exec(`
+      DELETE FROM book_subjects
+      WHERE EXISTS (
+        SELECT 1 FROM books b, subjects s
+        WHERE b.id = book_subjects.book_id
+          AND s.id = book_subjects.subject_id
+          AND b.source != s.source
+      )
+    `)
+    console.log('[db] Books table migration complete')
+  }
+
+  // On every startup: remove any lingering cross-source book_subjects links
+  db.exec(`
+    DELETE FROM book_subjects
+    WHERE EXISTS (
+      SELECT 1 FROM books b, subjects s
+      WHERE b.id = book_subjects.book_id
+        AND s.id = book_subjects.subject_id
+        AND b.source != s.source
+    )
+  `)
+
   console.log(`Database initialized: ${DB_PATH}`)
 }
 
@@ -184,10 +272,16 @@ export function getAllSettings(): Settings {
 // ─── Subjects ─────────────────────────────────────────────────────────────────
 
 export function getAllSubjects(source?: string): Subject[] {
-  if (source) {
-    return all<Subject>('SELECT * FROM subjects WHERE source = ? ORDER BY name', source)
-  }
-  return all<Subject>('SELECT * FROM subjects ORDER BY name')
+  const sql = `
+    SELECT s.*, COUNT(bs.book_id) AS book_count
+    FROM subjects s
+    LEFT JOIN book_subjects bs ON bs.subject_id = s.id
+    ${source ? 'WHERE s.source = ?' : ''}
+    GROUP BY s.id
+    ORDER BY s.name`
+  return source
+    ? all<Subject>(sql, source)
+    : all<Subject>(sql)
 }
 
 export function upsertSubject(
@@ -216,32 +310,34 @@ export function updateSubjectCrawledAt(slug: string): void {
   run(`UPDATE subjects SET last_crawled_at = datetime('now') WHERE slug = ?`, slug)
 }
 
-export function getExistingBookIds(subjectSlug: string): Set<string> {
+export function getExistingBookIds(subjectSlug: string, source: string): Set<string> {
   const rows = all<{ book_id: string }>(
     `SELECT b.book_id FROM books b
      JOIN book_subjects bs ON bs.book_id = b.id
      JOIN subjects s ON s.id = bs.subject_id
-     WHERE s.slug = ?`,
-    subjectSlug
+     WHERE s.slug = ? AND b.source = ?`,
+    subjectSlug,
+    source
   )
   return new Set(rows.map((r) => r.book_id))
 }
 
 // ─── Books ────────────────────────────────────────────────────────────────────
 
-export function bookExistsInDb(bookId: string): boolean {
-  return ((one<{ count: number }>('SELECT COUNT(*) AS count FROM books WHERE book_id = ?', bookId) ?? { count: 0 }).count) > 0
+export function bookExistsInDb(source: string, bookId: string): boolean {
+  return ((one<{ count: number }>('SELECT COUNT(*) AS count FROM books WHERE source = ? AND book_id = ?', source, bookId) ?? { count: 0 }).count) > 0
 }
 
 export function upsertBook(
   book: Omit<Book, 'id' | 'source' | 'first_seen_at' | 'updated_at' | 'local_path' | 'downloaded_at'> & { source?: Source }
 ): boolean {
-  const isNew = !bookExistsInDb(book.book_id)
+  const src = book.source ?? 'epubbooks'
+  const isNew = !bookExistsInDb(src, book.book_id)
   run(
     `INSERT INTO books
        (source, book_id, title, author, subject_slug, cover_url, book_url, download_url, description)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(book_id) DO UPDATE SET
+     ON CONFLICT(source, book_id) DO UPDATE SET
        title        = excluded.title,
        author       = excluded.author,
        cover_url    = excluded.cover_url,
@@ -249,7 +345,7 @@ export function upsertBook(
        download_url = excluded.download_url,
        description  = excluded.description,
        updated_at   = datetime('now')`,
-    book.source ?? 'epubbooks',
+    src,
     book.book_id,
     book.title,
     book.author,
@@ -260,8 +356,8 @@ export function upsertBook(
     book.description ?? null
   )
   // Add book-subject relationship
-  const bookRow = one<{ id: number }>('SELECT id FROM books WHERE book_id = ?', book.book_id)
-  const subjectRow = one<{ id: number }>('SELECT id FROM subjects WHERE slug = ?', book.subject_slug)
+  const bookRow = one<{ id: number }>('SELECT id FROM books WHERE source = ? AND book_id = ?', src, book.book_id)
+  const subjectRow = one<{ id: number }>('SELECT id FROM subjects WHERE slug = ? AND source = ?', book.subject_slug, src)
   if (bookRow && subjectRow) {
     run('INSERT OR IGNORE INTO book_subjects (book_id, subject_id) VALUES (?, ?)', bookRow.id, subjectRow.id)
   }

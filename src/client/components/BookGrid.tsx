@@ -9,6 +9,7 @@ interface BookGridProps {
   stats: { total: number; downloaded: number } | null
   isLoading: boolean
   hideCover: boolean
+  source: string
   onBookDownloaded: (id: number, localPath: string) => void
   onBookDeleted: (id: number) => void
 }
@@ -44,6 +45,7 @@ export default function BookGrid({
   stats,
   isLoading,
   hideCover,
+  source,
   onBookDownloaded,
   onBookDeleted,
 }: BookGridProps) {
@@ -92,7 +94,8 @@ export default function BookGrid({
           <div className="text-5xl">📚</div>
           <p className="text-gray-700 font-medium">No books indexed yet</p>
           <p className="text-gray-400 text-sm">
-            Click <strong className="text-gray-600">Update Index</strong> to crawl epubbooks.com
+            Click <strong className="text-gray-600">Update Index</strong> to crawl{' '}
+            {source === 'gutenberg' ? 'Project Gutenberg' : 'epubbooks.com'}
           </p>
         </div>
       </div>

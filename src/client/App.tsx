@@ -74,6 +74,7 @@ export default function App() {
         stats={stats}
         isLoading={isLoading}
         hideCover={hideCover}
+        source={source}
         onBookDownloaded={updateBook}
         onBookDeleted={deleteBook}
       />

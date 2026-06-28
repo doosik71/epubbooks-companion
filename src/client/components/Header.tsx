@@ -55,16 +55,6 @@ export default function Header({
         {/* Source selector */}
         <div className="flex items-center gap-1 shrink-0 border border-gray-200 rounded-lg p-0.5">
           <button
-            onClick={() => onSourceChange('epubbooks')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-              source === 'epubbooks'
-                ? 'bg-indigo-600 text-white'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            epubbooks
-          </button>
-          <button
             onClick={() => onSourceChange('gutenberg')}
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
               source === 'gutenberg'
@@ -73,6 +63,16 @@ export default function Header({
             }`}
           >
             Gutenberg
+          </button>
+          <button
+            onClick={() => onSourceChange('epubbooks')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              source === 'epubbooks'
+                ? 'bg-indigo-600 text-white'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            epubbooks
           </button>
         </div>
 

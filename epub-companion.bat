@@ -1,14 +1,12 @@
 @echo off
 cd /d "%~dp0"
 
-if not exist "dist\server\index.js" (
-    echo Building epub-companion...
-    call npm run build
-    if errorlevel 1 (
-        echo Build failed.
-        pause
-        exit /b 1
-    )
+echo Building epub-companion...
+call npm run build
+if errorlevel 1 (
+    echo Build failed.
+    pause
+    exit /b 1
 )
 
 start "" "http://localhost:3001"

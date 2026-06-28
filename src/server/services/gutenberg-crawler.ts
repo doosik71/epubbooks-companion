@@ -126,7 +126,7 @@ export async function runGutenbergUpdate(
   options: { force?: boolean; subject?: string } = {}
 ): Promise<void> {
   // 1. Fetch all bookshelves and upsert into subjects
-  emit({ type: 'start', totalSubjects: 0 })
+  emit({ type: 'start', totalSubjects: 0, batchLimit: BATCH_LIMIT })
   const bookshelves = await fetchBookshelfList()
   for (const bs of bookshelves) {
     upsertSubject({ slug: bs.slug, name: bs.name, url: bs.url, book_count: bs.book_count, source: 'gutenberg' })
@@ -150,7 +150,7 @@ export async function runGutenbergUpdate(
     ? allSubjects.map((s) => ({ ...s, crawl_offset: 0 }))
     : allSubjects.filter((s) => s.last_crawled_at === null || shouldRecrawl(s.last_crawled_at))
 
-  emit({ type: 'start', totalSubjects: pending.length })
+  emit({ type: 'start', totalSubjects: pending.length, batchLimit: BATCH_LIMIT })
 
   if (pending.length === 0) {
     emit({ type: 'complete', added: 0, skipped: 0 })

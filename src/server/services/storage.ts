@@ -12,12 +12,12 @@ export function sanitizeName(str: string): string {
   return result || 'unknown'
 }
 
-export function buildLocalPath(dataPath: string, author: string, title: string): string {
-  return path.join(dataPath, sanitizeName(author), `${sanitizeName(title)}.epub`)
+export function buildLocalPath(dataPath: string, source: string, author: string, title: string): string {
+  return path.join(dataPath, source, `${sanitizeName(title)}_by_${sanitizeName(author)}.epub`)
 }
 
-export function resolveUniqueLocalPath(dataPath: string, author: string, title: string): string {
-  const base = buildLocalPath(dataPath, author, title)
+export function resolveUniqueLocalPath(dataPath: string, source: string, author: string, title: string): string {
+  const base = buildLocalPath(dataPath, source, author, title)
   if (!fs.existsSync(base)) return base
   const dir = path.dirname(base)
   const name = path.basename(base, '.epub')

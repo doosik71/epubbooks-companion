@@ -18,7 +18,7 @@
 - **빠른 검색**: SQLite FTS5 전문검색으로 제목·저자·설명 검색
 - **주제 필터**: 카테고리 탭으로 주제별 필터링 (가로 스크롤 지원)
 - **특정 주제만 업데이트**: 주제를 선택한 상태에서 Update Index를 누르면 해당 주제만 크롤링
-- **원클릭 다운로드**: 카드의 Download 버튼으로 epub를 `<data_path>/<author>/<title>.epub`에 저장
+- **원클릭 다운로드**: 카드의 Download 버튼으로 epub를 `<data_path>/<source>/<title>_by_<author>.epub`에 저장
 - **다운로드 이력**: 이미 받은 책과 안 받은 책을 카드 색상으로 구분, Delete로 삭제 가능
 - **커버 이미지 숨기기**: Settings에서 커버 이미지를 숨겨 목록 밀도를 높일 수 있음
 - **설정 가능한 저장 경로**: epub를 저장할 디렉토리를 자유롭게 지정
@@ -82,17 +82,17 @@ epub-companion.bat
 
 ## 파일 저장 규칙
 
-저장 경로: `<data_path>/<author>/<title>.epub`
+저장 경로: `<data_path>/<source>/<title>_by_<author>.epub`
 
 파일명은 모든 OS에서 호환되도록 영문 소문자, 숫자, 언더바만 사용합니다.
 
 ```text
 data/
-  mark_twain/
-    the_adventures_of_tom_sawyer.epub
-    adventures_of_huckleberry_finn.epub
-  jane_austen/
-    pride_and_prejudice.epub
+  epubbooks/
+    the_adventures_of_tom_sawyer_by_mark_twain.epub
+    pride_and_prejudice_by_jane_austen.epub
+  gutenberg/
+    adventures_of_huckleberry_finn_by_mark_twain.epub
 ```
 
 ## data 폴더 백업 / 이동

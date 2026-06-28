@@ -189,7 +189,7 @@ export async function runIndexUpdate(
       emit({ type: 'subject', name: subject.name, done: subjectDone, total: toCrawl.length })
 
       try {
-        const existingIds = getExistingBookIds(subject.slug)
+        const existingIds = getExistingBookIds(subject.slug, 'epubbooks')
         let page = 1
         let hasNextPage = true
 

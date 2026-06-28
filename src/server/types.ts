@@ -46,6 +46,7 @@ export interface BooksQuery {
 export interface IndexUpdateEvent {
   type: 'crawling' | 'start' | 'subject' | 'book' | 'complete' | 'batch_limit' | 'error'
   totalSubjects?: number
+  batchLimit?: number
   name?: string
   done?: number
   total?: number

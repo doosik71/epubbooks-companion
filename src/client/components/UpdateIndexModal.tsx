@@ -14,7 +14,8 @@ type ModalStatus = 'connecting' | 'running' | 'done' | 'batch_limit' | 'error'
 
 export default function UpdateIndexModal({ source, subject, force, onClose, onComplete }: UpdateIndexModalProps) {
   const [status, setStatus] = useState<ModalStatus>('connecting')
-  const [progress, setProgress] = useState({ done: 0, total: 0 })
+  const [booksAdded, setBooksAdded] = useState(0)
+  const [batchLimit, setBatchLimit] = useState<number | null>(null)
   const [recentBooks, setRecentBooks] = useState<string[]>([])
   const [summary, setSummary] = useState<{ added: number; skipped: number } | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
@@ -43,10 +44,9 @@ export default function UpdateIndexModal({ source, subject, force, onClose, onCo
         setStatus('running')
       } else if (event.type === 'start') {
         setStatus('running')
-        if (event.totalSubjects) setProgress((p) => ({ ...p, total: event.totalSubjects! }))
-      } else if (event.type === 'subject') {
-        setProgress({ done: event.done ?? 0, total: event.total ?? 0 })
+        if (event.batchLimit) setBatchLimit(event.batchLimit)
       } else if (event.type === 'book' && event.new) {
+        setBooksAdded((n) => n + 1)
         setRecentBooks((prev) => [event.title ?? '', ...prev].slice(0, 6))
       } else if (event.type === 'complete') {
         setSummary({ added: event.added ?? 0, skipped: event.skipped ?? 0 })
@@ -70,7 +70,7 @@ export default function UpdateIndexModal({ source, subject, force, onClose, onCo
     }
   }, [source])
 
-  const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
+  const pct = batchLimit ? Math.min(100, Math.round((booksAdded / batchLimit) * 100)) : 0
   const canClose = status === 'done' || status === 'batch_limit' || status === 'error'
 
   return (
@@ -118,9 +118,10 @@ export default function UpdateIndexModal({ source, subject, force, onClose, onCo
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                 </svg>
                 <span className="text-gray-700">
-                  Crawling subjects:{' '}
+                  Crawling epubs:{' '}
                   <span className="font-medium">
-                    {progress.done} / {progress.total}
+                    {booksAdded.toLocaleString()}
+                    {batchLimit ? ` / ${batchLimit.toLocaleString()}` : ''}
                   </span>
                 </span>
               </>

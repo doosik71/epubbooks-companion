@@ -95,7 +95,7 @@ router.post('/:id/download', async (req, res) => {
       : await downloadEpubBooks(book)
 
     const settings = getAllSettings()
-    const localPath = resolveUniqueLocalPath(settings.data_path, book.author, book.title)
+    const localPath = resolveUniqueLocalPath(settings.data_path, book.source, book.author, book.title)
     writeEpub(localPath, fileBuffer)
     updateBookDownload(id, localPath)
     res.json({ local_path: localPath })
@@ -104,6 +104,19 @@ router.post('/:id/download', async (req, res) => {
     res.status(500).json({ error: String(err), book_url: book.book_url })
   }
 })
+
+function assertEpubFormat(buf: Buffer, contentType: string): void {
+  const ct = contentType.toLowerCase()
+  if (ct.includes('epub')) return
+  // Check for PDF by content-type or magic bytes (%PDF = 25 50 44 46)
+  const isPdf = ct.includes('pdf') ||
+    (buf.length >= 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46)
+  if (isPdf) throw new Error(`[format] Expected epub but received PDF`)
+  // Any other explicit non-epub, non-binary type
+  if (ct && !ct.includes('octet-stream') && !ct.includes('zip')) {
+    throw new Error(`[format] Expected epub but received: ${contentType}`)
+  }
+}
 
 async function downloadGutenberg(book: { book_id: string; download_url: string | null; book_url: string }): Promise<Buffer> {
   const url = book.download_url ?? `https://www.gutenberg.org/ebooks/${book.book_id}.epub.images`
@@ -120,7 +133,9 @@ async function downloadGutenberg(book: { book_id: string; download_url: string |
   if (ct.includes('text/html')) {
     throw new Error('[gutenberg] Server returned HTML — epub may not be available for this book')
   }
-  return Buffer.from(res.data)
+  const buf = Buffer.from(res.data)
+  assertEpubFormat(buf, ct)
+  return buf
 }
 
 async function downloadEpubBooks(book: { book_url: string }): Promise<Buffer> {
@@ -183,7 +198,9 @@ async function downloadEpubBooks(book: { book_url: string }): Promise<Buffer> {
   if (ct.includes('text/html')) {
     throw new Error('[step3] Server returned an HTML error page instead of the epub file')
   }
-  return Buffer.from(fileRes.data)
+  const buf = Buffer.from(fileRes.data)
+  assertEpubFormat(buf, ct)
+  return buf
 }
 
 // DELETE /api/books/:id/download — remove file from disk and clear DB reference
